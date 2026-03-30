@@ -1,0 +1,7 @@
+payment_id,payee_name,amount,payment_date
+1002,Microsft Corporation,8000,2025-03-02
+1003,Dell Tech,12000,2025-03-03
+1005,Ind Supplies,3500,2025-03-05
+1006,Amazon AWS,9500,2025-03-06
+1007,Sneaky Consulting LLC,25000,2025-03-07
+1010,Fake Vendor Ltd,18000,2025-03-10
