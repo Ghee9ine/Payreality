@@ -11,6 +11,7 @@ from datetime import datetime
 from rapidfuzz import fuzz, process
 import re
 import hashlib
+from payreality_parser import FileParser
 
 class DataValidationError(Exception):
     """Custom exception for data validation errors"""
@@ -29,6 +30,7 @@ class PayRealityEngine:
         self.payments_df = None
         self.results = []
         self.exceptions = []
+        self.match_stats = {}
         self.hash_cache = {}
         
     def setup_logging(self, log_level):
@@ -129,35 +131,81 @@ class PayRealityEngine:
         
         return df
     
-    def load_files(self, master_file: str, payments_file: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def load_files(self, master_file: str, payments_file: str, 
+                   payments_format: str = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Load and validate both input files
+        Load and validate both input files, supporting multiple formats
         """
         self.logger.info("=" * 60)
         self.logger.info("Loading and validating input files")
         self.logger.info("=" * 60)
         
-        # Validate vendor master
+        parser = FileParser()
+        
+        # Validate vendor master (CSV or Excel)
         self.master_df = self.validate_file(
             master_file, 
             ['vendor_name'], 
             'Vendor Master'
         )
         
-        # Validate payments file
-        self.payments_df = self.validate_file(
-            payments_file,
-            ['payee_name', 'amount'],
-            'Payments'
-        )
+        # Parse payments file (CSV, Excel, or PDF)
+        try:
+            self.payments_df = parser.parse_file(payments_file, payments_format)
+            self.logger.info(f"Parsed {len(self.payments_df)} payment records")
+        except Exception as e:
+            raise DataValidationError(f"Failed to parse payments file: {str(e)}")
+        
+        # Validate the parsed payments data
+        required_cols = ['payee_name', 'amount']
+        missing = [col for col in required_cols if col not in self.payments_df.columns]
+        
+        if missing:
+            # Try to map columns automatically
+            self.logger.warning(f"Missing columns: {missing}")
+            self.payments_df = self._map_columns(self.payments_df)
+            
+            # Check again
+            missing = [col for col in required_cols if col not in self.payments_df.columns]
+            if missing:
+                raise DataValidationError(
+                    f"Payments file missing required columns: {missing}\n"
+                    f"Found columns: {list(self.payments_df.columns)}"
+                )
         
         # Additional validation: check for negative amounts
         negative_amounts = self.payments_df[self.payments_df['amount'] < 0]
         if len(negative_amounts) > 0:
             self.logger.warning(f"Found {len(negative_amounts):,} payments with negative amounts")
-            # Optionally filter them out? We'll keep them but note in report
         
         return self.master_df, self.payments_df
+    
+    def _map_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Try to map common column names to required fields"""
+        column_mapping = {}
+        
+        # Payee name mapping
+        name_keywords = ['vendor', 'payee', 'supplier', 'name', 'pay_to', 'recipient', 'payable_to']
+        for col in df.columns:
+            col_lower = col.lower()
+            if any(keyword in col_lower for keyword in name_keywords):
+                column_mapping[col] = 'payee_name'
+                break
+        
+        # Amount mapping
+        amount_keywords = ['amount', 'value', 'total', 'price', 'cost', 'invoice_amount', 'payment_amount']
+        for col in df.columns:
+            col_lower = col.lower()
+            if any(keyword in col_lower for keyword in amount_keywords):
+                column_mapping[col] = 'amount'
+                break
+        
+        # Rename columns
+        if column_mapping:
+            df = df.rename(columns=column_mapping)
+            self.logger.info(f"Mapped columns: {column_mapping}")
+        
+        return df
     
     def clean_name(self, name: str, config: Dict = None) -> str:
         """
@@ -178,7 +226,8 @@ class PayRealityEngine:
                         ' technologies', ' solutions', ' group', 
                         ' holdings', ' international', ' systems',
                         ' pty ltd', ' cc', ' partnership', ' and',
-                        ' the', ' co', ' company', ' enterprises']
+                        ' the', ' co', ' company', ' enterprises',
+                        ' limited', ' corporation', ' incorporated']
         }
         
         if config:
@@ -279,7 +328,8 @@ class PayRealityEngine:
         return None, 0, "none"
     
     def run_analysis(self, master_file: str, payments_file: str, 
-                     threshold: int = 80, batch_size: int = 10000) -> Dict:
+                     threshold: int = 80, batch_size: int = 10000,
+                     payments_format: str = None) -> Dict:
         """
         Main analysis engine with comprehensive results
         """
@@ -288,7 +338,7 @@ class PayRealityEngine:
         self.logger.info("=" * 60)
         
         # Load files
-        master_df, payments_df = self.load_files(master_file, payments_file)
+        master_df, payments_df = self.load_files(master_file, payments_file, payments_format)
         
         # Get master vendor list
         master_vendors = master_df['vendor_name'].tolist()
@@ -347,6 +397,8 @@ class PayRealityEngine:
         # Calculate Control Entropy Score
         entropy_score = (exception_spend / total_spend * 100) if total_spend > 0 else 0
         
+        self.match_stats = match_stats
+        
         self.logger.info("=" * 60)
         self.logger.info("Analysis Complete")
         self.logger.info(f"Total Payments: {len(results):,}")
@@ -356,7 +408,8 @@ class PayRealityEngine:
         self.logger.info(f"Control Entropy Score: {entropy_score:.2f}%")
         self.logger.info(f"Match Strategy Distribution:")
         for strategy, count in sorted(match_stats.items(), key=lambda x: x[1], reverse=True):
-            self.logger.info(f"  {strategy}: {count:,} ({count/len(results)*100:.1f}%)")
+            percentage = (count / len(results) * 100) if len(results) > 0 else 0
+            self.logger.info(f"  {strategy}: {count:,} ({percentage:.1f}%)")
         self.logger.info("=" * 60)
         
         return {
