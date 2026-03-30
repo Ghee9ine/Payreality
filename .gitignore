@@ -1,0 +1,41 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environment
+venv/
+env/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Generated files
+logs/
+*.log
+*.xlsx
+*.pdf
+exceptions_*.csv
+payreality_*.log
+payreality_report.xlsx
+payreality_exceptions.csv
+payreality_*.pdf
+0
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Configuration (if contains sensitive data)
+payreality_config.json
+
+# Reports
+PayReality_Reports/
+*.pdf
