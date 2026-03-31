@@ -1,13 +1,13 @@
 """
 PayReality Reporting Module
-Professional PDF generation with executive summaries, recommendations, and methodology
+Professional PDF generation with 7-Pass Semantic Matching details
 """
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch, cm
+from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from datetime import datetime
 import os
@@ -19,6 +19,7 @@ class PayRealityReport:
         self.client_name = client_name
         self.config = config or {}
         self.logger = logging.getLogger('PayReality')
+        self.inch = inch
         
         # Report styling
         self.colors = {
@@ -31,9 +32,41 @@ class PayRealityReport:
             'light_gray': colors.HexColor('#ECF0F1')
         }
         
+        # Create styles
+        self.styles = getSampleStyleSheet()
+        self.title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=self.styles['Heading1'],
+            fontSize=28,
+            textColor=self.colors['primary'],
+            alignment=TA_CENTER,
+            spaceAfter=20,
+            fontName='Helvetica-Bold'
+        )
+        
+        self.section_style = ParagraphStyle(
+            'SectionHeader',
+            parent=self.styles['Heading2'],
+            fontSize=18,
+            textColor=self.colors['accent'],
+            spaceBefore=20,
+            spaceAfter=12,
+            fontName='Helvetica-Bold'
+        )
+        
+        self.subsection_style = ParagraphStyle(
+            'SubSectionHeader',
+            parent=self.styles['Heading3'],
+            fontSize=14,
+            textColor=self.colors['primary'],
+            spaceBefore=15,
+            spaceAfter=8,
+            fontName='Helvetica-Bold'
+        )
+    
     def generate_report(self, results: dict, output_dir: str) -> str:
         """
-        Generate comprehensive PDF report
+        Generate comprehensive PDF report with 7-Pass Semantic Matching details
         """
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"PayReality_Report_{self.client_name.replace(' ', '_')}_{timestamp}.pdf"
@@ -45,43 +78,11 @@ class PayRealityReport:
                                 rightMargin=72, leftMargin=72,
                                 topMargin=72, bottomMargin=72)
         
-        styles = getSampleStyleSheet()
         story = []
         
-        # Custom styles
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=28,
-            textColor=self.colors['primary'],
-            alignment=TA_CENTER,
-            spaceAfter=20,
-            fontName='Helvetica-Bold'
-        )
-        
-        section_style = ParagraphStyle(
-            'SectionHeader',
-            parent=styles['Heading2'],
-            fontSize=18,
-            textColor=self.colors['accent'],
-            spaceBefore=20,
-            spaceAfter=12,
-            fontName='Helvetica-Bold'
-        )
-        
-        subsection_style = ParagraphStyle(
-            'SubSectionHeader',
-            parent=styles['Heading3'],
-            fontSize=14,
-            textColor=self.colors['primary'],
-            spaceBefore=15,
-            spaceAfter=8,
-            fontName='Helvetica-Bold'
-        )
-        
         # Title page
-        story.append(Paragraph("PayReality", title_style))
-        story.append(Paragraph("Independent Control Validation Report", styles['Heading2']))
+        story.append(Paragraph("PayReality", self.title_style))
+        story.append(Paragraph("Independent Control Validation Report", self.styles['Heading2']))
         story.append(Spacer(1, 24))
         
         # Report metadata
@@ -108,7 +109,7 @@ class PayRealityReport:
         story.append(Spacer(1, 30))
         
         # Executive Summary
-        story.append(Paragraph("Executive Summary", section_style))
+        story.append(Paragraph("Executive Summary", self.section_style))
         story.append(Spacer(1, 12))
         
         entropy = results['entropy_score']
@@ -127,14 +128,13 @@ class PayRealityReport:
         
         <b>Risk Level: {risk_level}</b> - {self._get_risk_description(entropy)}
         """
-        story.append(Paragraph(summary_text, styles['Normal']))
+        story.append(Paragraph(summary_text, self.styles['Normal']))
         story.append(Spacer(1, 20))
         
-        # Control Entropy Score (visual)
-        story.append(Paragraph("Control Entropy Score", section_style))
+        # Control Entropy Score
+        story.append(Paragraph("Control Entropy Score", self.section_style))
         story.append(Spacer(1, 12))
         
-        # Create score card
         score_data = [
             ["Metric", "Value", "Status"],
             ["Control Entropy Score", f"{entropy:.1f}%", risk_level],
@@ -159,92 +159,231 @@ class PayRealityReport:
         story.append(score_table)
         story.append(Spacer(1, 20))
         
-        # Match Statistics
+        # 7-Pass Semantic Matching Results
         if results.get('match_stats'):
-            story.append(Paragraph("Matching Statistics", subsection_style))
+            story.append(Paragraph("7-Pass Semantic Matching Results", self.section_style))
             story.append(Spacer(1, 8))
             
-            match_data = [["Strategy", "Count", "Percentage"]]
-            total = results['total_payments']
-            for strategy, count in sorted(results['match_stats'].items(), key=lambda x: x[1], reverse=True):
-                percentage = (count / total * 100) if total > 0 else 0
-                strategy_name = strategy.replace('_', ' ').title()
-                match_data.append([strategy_name, f"{count:,}", f"{percentage:.1f}%"])
+            match_explanation = """
+            PayReality uses a <b>7-pass semantic matching engine</b> to identify payments that should be linked to approved vendors:
             
-            match_table = Table(match_data, colWidths=[2.5*inch, 1.5*inch, 1.5*inch])
-            match_table.setStyle(TableStyle([
+            <b>Pass 1 - Exact:</b> Perfect character-for-character matches<br/>
+            <b>Pass 2 - Normalized:</b> Matches after cleaning (case, punctuation, suffixes)<br/>
+            <b>Pass 3 - Token Sort:</b> Handles word order variations<br/>
+            <b>Pass 4 - Partial:</b> Handles extra words in vendor names<br/>
+            <b>Pass 5 - Levenshtein:</b> Catches typos and character errors<br/>
+            <b>Pass 6 - Phonetic:</b> Matches similar-sounding names<br/>
+            <b>Pass 7 - Obfuscation:</b> Detects intentional hiding (dots, leetspeak, repeated characters)<br/>
+            """
+            story.append(Paragraph(match_explanation, self.styles['Normal']))
+            story.append(Spacer(1, 12))
+            
+            match_data = [["Match Strategy", "Count", "Percentage", "Description"]]
+            strategy_descriptions = {
+                'exact': 'Perfect character match',
+                'normalized': 'Match after cleaning',
+                'token_sort': 'Word order variation',
+                'partial': 'Extra words ignored',
+                'levenshtein': 'Typo/character error',
+                'phonetic': 'Sound-alike match',
+                'obfuscation': 'Intentional hiding detected',
+                'none': 'No match (exception)'
+            }
+            
+            total = results['total_payments']
+            for strategy in ['exact', 'normalized', 'token_sort', 'partial', 'levenshtein', 'phonetic', 'obfuscation', 'none']:
+                count = results['match_stats'].get(strategy, 0)
+                percentage = (count / total * 100) if total > 0 else 0
+                desc = strategy_descriptions.get(strategy, '')
+                match_data.append([
+                    strategy.replace('_', ' ').title(),
+                    f"{count:,}",
+                    f"{percentage:.1f}%",
+                    desc
+                ])
+            
+            match_summary_table = Table(match_data, colWidths=[1.5*inch, 1*inch, 1*inch, 2.5*inch])
+            match_summary_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), self.colors['gray']),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
                 ('GRID', (0, 0), (-1, -1), 1, self.colors['gray']),
+                ('BACKGROUND', (0, 1), (-1, -1), self.colors['light_gray']),
             ]))
-            story.append(match_table)
+            story.append(match_summary_table)
             story.append(Spacer(1, 20))
         
-        # Top Exceptions
-        if results.get('exceptions'):
-            story.append(Paragraph("Top Exception Vendors", subsection_style))
+        # Duplicate Summary
+        duplicates = results.get('duplicates', [])
+        if duplicates:
+            story.append(Paragraph("Duplicate Payments Detected", self.subsection_style))
+            story.append(Spacer(1, 8))
+            
+            duplicate_text = f"Found <b>{len(duplicates)}</b> vendors with multiple payments that may represent duplicate or split payments."
+            story.append(Paragraph(duplicate_text, self.styles['Normal']))
+            story.append(Spacer(1, 10))
+            
+            duplicate_data = [["Vendor", "Payment Count", "Total Amount"]]
+            for d in duplicates[:10]:
+                duplicate_data.append([
+                    d.get('display_name', d.get('vendor', 'Unknown'))[:50],
+                    str(d.get('count', 0)),
+                    f"R {d.get('total', 0):,.2f}"
+                ])
+            
+            duplicate_table = Table(duplicate_data, colWidths=[3.5*inch, 1.2*inch, 1.5*inch])
+            duplicate_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), self.colors['gray']),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('GRID', (0, 0), (-1, -1), 1, self.colors['gray']),
+            ]))
+            story.append(duplicate_table)
+            story.append(Spacer(1, 20))
+        
+        # Exceptions List with Match Strategy
+        exceptions = results.get('exceptions', [])
+        if exceptions:
+            story.append(Paragraph("Exception Vendors", self.subsection_style))
             story.append(Spacer(1, 8))
             
             max_exceptions = self.config.get('max_exceptions_in_report', 20)
-            top_exceptions = sorted(results['exceptions'], key=lambda x: x['amount'], reverse=True)[:max_exceptions]
+            top_exceptions = sorted(exceptions, key=lambda x: x.get('amount', 0), reverse=True)[:max_exceptions]
             
-            exception_data = [["Vendor Name", "Amount", "Match Score"]]
+            exception_data = [["Vendor Name", "Amount", "First Seen", "Last Seen", "Payments", "Match Method", "Risk Level"]]
             for ex in top_exceptions:
+                first_seen = ex.get('first_seen', '')[:10]
+                last_seen = ex.get('last_seen', '')[:10]
+                payment_count = ex.get('payment_count', 0)
+                risk_level = ex.get('risk_level', 'Low')
+                match_strategy = ex.get('match_strategy', 'none').replace('_', ' ').title()
+                tenure_days = ex.get('tenure_days', 0)
+                
+                # Format tenure
+                if tenure_days > 0:
+                    if tenure_days > 365:
+                        years = tenure_days // 365
+                        months = (tenure_days % 365) // 30
+                        tenure_text = f"{years}y {months}m"
+                    elif tenure_days > 30:
+                        months = tenure_days // 30
+                        days = tenure_days % 30
+                        tenure_text = f"{months}m {days}d"
+                    else:
+                        tenure_text = f"{tenure_days}d"
+                else:
+                    tenure_text = ""
+                
+                # Highlight obfuscation matches
+                if 'obfuscation' in match_strategy.lower():
+                    match_strategy = f"🔍 {match_strategy}"
+                
                 exception_data.append([
-                    ex['payee_name'][:60], 
-                    f"R {ex['amount']:,.2f}", 
-                    f"{ex.get('match_score', 0)}%"
+                    ex.get('payee_name', 'Unknown')[:45],
+                    f"R {ex.get('amount', 0):,.2f}",
+                    first_seen or "N/A",
+                    last_seen or "N/A",
+                    f"{payment_count} ({tenure_text})" if payment_count > 0 else "N/A",
+                    match_strategy,
+                    risk_level
                 ])
             
-            exception_table = Table(exception_data, colWidths=[4*inch, 1.2*inch, 0.8*inch])
+            exception_table = Table(exception_data, colWidths=[2.2*inch, 0.8*inch, 0.7*inch, 0.7*inch, 0.8*inch, 0.9*inch, 0.6*inch])
             exception_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), self.colors['gray']),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                 ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-                ('ALIGN', (2, 0), (2, -1), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 8),
                 ('GRID', (0, 0), (-1, -1), 1, self.colors['gray']),
                 ('BACKGROUND', (0, 1), (-1, -1), self.colors['light_gray']),
             ]))
             story.append(exception_table)
+            story.append(Spacer(1, 20))
             
-            if len(results['exceptions']) > max_exceptions:
+            if len(exceptions) > max_exceptions:
                 story.append(Paragraph(
-                    f"\n... and {len(results['exceptions']) - max_exceptions} additional exceptions. "
+                    f"\n... and {len(exceptions) - max_exceptions} additional exceptions. "
                     f"See the CSV export for complete details.",
-                    styles['Italic']
+                    self.styles['Italic']
                 ))
+                story.append(Spacer(1, 20))
+            
+            # Risk Summary Table
+            story.append(Paragraph("Risk Summary", self.subsection_style))
+            story.append(Spacer(1, 8))
+            
+            risk_data = [["Vendor", "Risk Level", "Risk Score", "Active Period", "Risk Factors"]]
+            for ex in top_exceptions[:15]:
+                first_seen = ex.get('first_seen', '')[:10]
+                last_seen = ex.get('last_seen', '')[:10]
+                tenure_days = ex.get('tenure_days', 0)
+                
+                if first_seen and last_seen:
+                    active_period = f"{first_seen} to {last_seen}"
+                elif tenure_days > 0:
+                    if tenure_days > 365:
+                        active_period = f"{tenure_days//365} years"
+                    elif tenure_days > 30:
+                        active_period = f"{tenure_days//30} months"
+                    else:
+                        active_period = f"{tenure_days} days"
+                else:
+                    active_period = "N/A"
+                
+                risk_data.append([
+                    ex.get('payee_name', 'Unknown')[:40],
+                    ex.get('risk_level', 'Low'),
+                    f"{ex.get('risk_score', 0)}%",
+                    active_period,
+                    ", ".join(ex.get('risk_reasons', ['Review needed'])[:2])
+                ])
+            
+            risk_table = Table(risk_data, colWidths=[2.5*inch, 0.8*inch, 0.7*inch, 1.2*inch, 2.2*inch])
+            risk_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), self.colors['gray']),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('GRID', (0, 0), (-1, -1), 1, self.colors['gray']),
+                ('BACKGROUND', (0, 1), (-1, -1), self.colors['light_gray']),
+            ]))
+            story.append(risk_table)
+            story.append(Spacer(1, 20))
+            
         else:
             story.append(Paragraph(
-                "<b>✓ No exceptions found.</b> Your vendor payment controls appear to be operating effectively.",
-                styles['Normal']
+                "<b>No exceptions found.</b> Your vendor payment controls appear to be operating effectively.",
+                self.styles['Normal']
             ))
-        
-        story.append(Spacer(1, 20))
+            story.append(Spacer(1, 20))
         
         # Recommendations
         if self.config.get('include_recommendations', True):
-            story.append(Paragraph("Recommendations", section_style))
+            story.append(Paragraph("Recommendations", self.section_style))
             story.append(Spacer(1, 12))
             
             recommendations = self._generate_recommendations(
                 results['entropy_score'], 
-                results['exception_count'], 
-                results['master_vendor_count'],
-                results.get('match_stats', {})
+                results.get('exception_count', 0), 
+                results.get('master_vendor_count', 0),
+                results.get('match_stats', {}),
+                len(results.get('duplicates', []))
             )
             
             for i, rec in enumerate(recommendations, 1):
-                story.append(Paragraph(f"<b>{i}.</b> {rec}", styles['Normal']))
+                story.append(Paragraph(f"<b>{i}.</b> {rec}", self.styles['Normal']))
                 story.append(Spacer(1, 6))
             
             story.append(Spacer(1, 20))
         
         # Methodology
         if self.config.get('include_methodology', True):
-            story.append(Paragraph("Methodology", section_style))
+            story.append(Paragraph("Methodology", self.section_style))
             story.append(Spacer(1, 12))
             
             methodology_text = """
@@ -252,44 +391,51 @@ class PayRealityReport:
             
             <b>1. Data Extraction:</b> Raw vendor master and payment transaction data is extracted from your ERP system.
             
-            <b>2. Semantic Matching:</b> The actual payee name from each payment is compared against the approved vendor master 
-            using advanced fuzzy matching algorithms that account for:
-            • Typos and spelling variations
-            • Abbreviations and acronyms
-            • Corporate suffix variations (Ltd, Inc, Corp, etc.)
-            • Word order differences
-            • Phonetic similarities
+            <b>2. 7-Pass Semantic Matching:</b> The actual payee name from each payment is compared against the approved vendor master 
+            using seven progressive matching strategies:
+            • <b>Exact Match:</b> Perfect character-for-character matching
+            • <b>Normalized Match:</b> Cleaning of case, punctuation, and corporate suffixes
+            • <b>Token Sort Ratio:</b> Handles word order variations
+            • <b>Partial Ratio:</b> Handles extra words in vendor names
+            • <b>Levenshtein Distance:</b> Catches typos and character errors
+            • <b>Phonetic Matching:</b> Matches similar-sounding names
+            • <b>Obfuscation Detection:</b> Identifies intentional hiding (dots, leetspeak, repeated characters)
             
-            <b>3. Multiple Matching Strategies:</b> Our engine uses five distinct matching strategies:
-            • Exact Clean Match: After cleaning (removing suffixes, punctuation)
-            • Token Sort Ratio: Handles word order variations
-            • Partial Ratio: Handles extra words in vendor names
-            • Phonetic Matching: Catches similar-sounding names
-            • Quick Ratio: A fast fallback for close matches
+            <b>3. Duplicate Detection:</b> Payments are analyzed to identify vendors that appear multiple times across different 
+            payment methods, indicating potential duplicate or split payments.
             
-            <b>4. Exception Identification:</b> Payments that cannot be confidently matched to an approved vendor (score below configurable threshold) are flagged as exceptions.
+            <b>4. Tenure Analysis:</b> For each unapproved vendor, PayReality tracks:
+            • First appearance date
+            • Most recent payment date
+            • Total payment count
+            • Active duration (tenure)
             
-            <b>5. Control Entropy Calculation:</b> The Control Entropy Score represents the percentage of total spend that bypassed approved controls.
+            <b>5. Risk Scoring:</b> Each exception vendor is assigned a risk score based on:
+            • Unapproved vendor status
+            • Total payment volume
+            • Duplicate payment indicators
+            • Payment tenure and frequency
+            • Weekend payment patterns
             
-            <b>6. Independent Validation:</b> Unlike ERP controls that rely on Vendor IDs, PayReality performs independent validation using the actual payee name, ensuring true control effectiveness.
+            <b>6. Control Entropy Calculation:</b> The Control Entropy Score represents the percentage of total spend that bypassed approved controls.
             """
-            story.append(Paragraph(methodology_text, styles['Normal']))
+            story.append(Paragraph(methodology_text, self.styles['Normal']))
             story.append(Spacer(1, 20))
         
         # Footer
         story.append(Spacer(1, 30))
         footer_text = f"""
         <font size=8 color='{self.colors['gray']}'>
-        PayReality v1.0 - Independent Control Validation<br/>
+        PayReality - Independent Control Validation<br/>
         Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}<br/>
         This report is for internal use only.
         </font>
         """
-        story.append(Paragraph(footer_text, styles['Normal']))
+        story.append(Paragraph(footer_text, self.styles['Normal']))
         
         # Build PDF
         doc.build(story)
-        self.logger.info(f"✓ PDF report generated: {filepath}")
+        self.logger.info(f"PDF report generated: {filepath}")
         return filepath
     
     def _get_risk_level(self, entropy: float) -> str:
@@ -322,10 +468,10 @@ class PayRealityReport:
             return "CRITICAL: Controls are severely compromised. Executive attention required."
     
     def _generate_recommendations(self, entropy: float, exception_count: int, 
-                                   master_count: int, match_stats: Dict = None) -> List[str]:
+                                   master_count: int, match_stats: Dict = None,
+                                   duplicate_count: int = 0) -> List[str]:
         recommendations = []
         
-        # Priority based on entropy
         if entropy > 30:
             recommendations.append("Escalate findings to audit committee immediately")
         
@@ -335,22 +481,23 @@ class PayRealityReport:
         if exception_count > 0:
             recommendations.append("Implement a monthly exception review process to prevent control decay")
         
+        if duplicate_count > 0:
+            recommendations.append(f"Investigate {duplicate_count} potential duplicate payment(s) to recover lost funds")
+        
         if master_count < 100:
             recommendations.append("Consider expanding vendor master to include frequently used but unapproved vendors")
         
         if entropy > 20:
             recommendations.append("Conduct root cause analysis to understand why controls are being bypassed")
         
-        # Match strategy based recommendations
-        if match_stats:
-            phonetic_matches = match_stats.get('phonetic', 0)
-            if phonetic_matches > 0:
-                recommendations.append(f"Review {phonetic_matches:,} phonetic matches - these may indicate data entry errors or intentional obfuscation")
+        # Obfuscation detection recommendation
+        if match_stats and match_stats.get('obfuscation', 0) > 0:
+            obfuscation_count = match_stats.get('obfuscation', 0)
+            recommendations.append(f"Investigate {obfuscation_count} payments with intentional obfuscation patterns - potential fraud indicators")
         
-        # Standard recommendations
         recommendations.append("Establish a regular (monthly/quarterly) Control Entropy Score tracking")
         
         if exception_count > 10:
             recommendations.append("Consider implementing automated controls for one-time vendor creation")
         
-        return recommendations[:7]  # Limit to top 7
+        return recommendations[:7]

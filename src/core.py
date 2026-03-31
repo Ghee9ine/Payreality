@@ -1,6 +1,6 @@
 """
 PayReality Core Module
-Professional data validation, error handling, and matching engine
+7-Pass Semantic Matching Engine
 """
 
 import pandas as pd
@@ -11,19 +11,17 @@ from datetime import datetime
 from rapidfuzz import fuzz, process
 import re
 import hashlib
+from collections import defaultdict
+import numpy as np
 from src.parser import FileParser
 
+
 class DataValidationError(Exception):
-    """Custom exception for data validation errors"""
     pass
 
-class MatchingError(Exception):
-    """Custom exception for matching errors"""
-    pass
 
 class PayRealityEngine:
     def __init__(self, log_level=logging.INFO, config: Dict = None):
-        """Initialize the PayReality engine with configuration"""
         self.config = config or {}
         self.setup_logging(log_level)
         self.master_df = None
@@ -32,59 +30,42 @@ class PayRealityEngine:
         self.exceptions = []
         self.match_stats = {}
         self.hash_cache = {}
-        
+    
     def setup_logging(self, log_level):
-        """Configure professional logging with file rotation"""
         self.logger = logging.getLogger('PayReality')
         self.logger.setLevel(log_level)
         
-        # Create logs directory if it doesn't exist
         log_dir = "logs"
         os.makedirs(log_dir, exist_ok=True)
         
-        # File handler with rotation (simple version)
         log_file = os.path.join(log_dir, f"payreality_{datetime.now().strftime('%Y%m%d')}.log")
         fh = logging.FileHandler(log_file, mode='a')
         fh.setLevel(log_level)
-        
-        # Console handler
         ch = logging.StreamHandler()
         ch.setLevel(log_level)
         
-        # Formatter
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         fh.setFormatter(formatter)
         ch.setFormatter(formatter)
         
-        # Remove existing handlers to avoid duplicates
         self.logger.handlers.clear()
         self.logger.addHandler(fh)
         self.logger.addHandler(ch)
         
-        self.logger.info(f"PayReality engine initialized")
+        self.logger.info(f"PayReality engine initialized with 7-pass semantic matching")
     
     def validate_file(self, filepath: str, expected_columns: List[str], file_type: str) -> pd.DataFrame:
-        """
-        Validate file exists, can be read, and has required columns
-        Returns: DataFrame with validated data
-        """
-        self.logger.info(f"Validating {file_type}: {filepath}")
-        
-        # Check file exists
         if not os.path.exists(filepath):
             raise DataValidationError(f"{file_type} file not found: {filepath}")
         
-        # Check file size
         file_size = os.path.getsize(filepath)
         if file_size == 0:
             raise DataValidationError(f"{file_type} file is empty: {filepath}")
         
         self.logger.info(f"File size: {file_size:,} bytes")
         
-        # Try to read file with multiple encodings
         encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
         df = None
-        used_encoding = None
         
         for encoding in encodings:
             try:
@@ -94,12 +75,9 @@ class PayRealityEngine:
                     df = pd.read_excel(filepath)
                 else:
                     raise DataValidationError(f"Unsupported file format: {filepath}")
-                
-                used_encoding = encoding
                 self.logger.info(f"Successfully read file with {encoding} encoding")
                 break
             except UnicodeDecodeError:
-                self.logger.warning(f"Failed with {encoding} encoding")
                 continue
             except Exception as e:
                 self.logger.warning(f"Failed with {encoding}: {str(e)[:100]}")
@@ -108,7 +86,6 @@ class PayRealityEngine:
         if df is None:
             raise DataValidationError(f"Could not read {file_type} file with any encoding")
         
-        # Check for required columns
         missing_columns = [col for col in expected_columns if col not in df.columns]
         if missing_columns:
             raise DataValidationError(
@@ -116,13 +93,11 @@ class PayRealityEngine:
                 f"Found columns: {list(df.columns)}"
             )
         
-        # Check for empty data
         if len(df) == 0:
             raise DataValidationError(f"{file_type} file has no data rows")
         
         self.logger.info(f"Loaded {len(df):,} rows, {len(df.columns)} columns")
         
-        # Data quality checks
         null_counts = df[expected_columns].isnull().sum()
         for col, null_count in null_counts.items():
             if null_count > 0:
@@ -131,41 +106,27 @@ class PayRealityEngine:
         
         return df
     
-    def load_files(self, master_file: str, payments_file: str, 
-                   payments_format: str = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Load and validate both input files, supporting multiple formats
-        """
+    def load_files(self, master_file: str, payments_file: str, payments_format: str = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
         self.logger.info("=" * 60)
         self.logger.info("Loading and validating input files")
         self.logger.info("=" * 60)
         
         parser = FileParser()
         
-        # Validate vendor master (CSV or Excel)
-        self.master_df = self.validate_file(
-            master_file, 
-            ['vendor_name'], 
-            'Vendor Master'
-        )
+        self.master_df = self.validate_file(master_file, ['vendor_name'], 'Vendor Master')
         
-        # Parse payments file (CSV, Excel, or PDF)
         try:
             self.payments_df = parser.parse_file(payments_file, payments_format)
             self.logger.info(f"Parsed {len(self.payments_df)} payment records")
         except Exception as e:
             raise DataValidationError(f"Failed to parse payments file: {str(e)}")
         
-        # Validate the parsed payments data
         required_cols = ['payee_name', 'amount']
         missing = [col for col in required_cols if col not in self.payments_df.columns]
         
         if missing:
-            # Try to map columns automatically
             self.logger.warning(f"Missing columns: {missing}")
             self.payments_df = self._map_columns(self.payments_df)
-            
-            # Check again
             missing = [col for col in required_cols if col not in self.payments_df.columns]
             if missing:
                 raise DataValidationError(
@@ -173,7 +134,6 @@ class PayRealityEngine:
                     f"Found columns: {list(self.payments_df.columns)}"
                 )
         
-        # Additional validation: check for negative amounts
         negative_amounts = self.payments_df[self.payments_df['amount'] < 0]
         if len(negative_amounts) > 0:
             self.logger.warning(f"Found {len(negative_amounts):,} payments with negative amounts")
@@ -181,26 +141,22 @@ class PayRealityEngine:
         return self.master_df, self.payments_df
     
     def _map_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Try to map common column names to required fields"""
         column_mapping = {}
         
-        # Payee name mapping
-        name_keywords = ['vendor', 'payee', 'supplier', 'name', 'pay_to', 'recipient', 'payable_to']
+        name_keywords = ['vendor', 'payee', 'supplier', 'name', 'pay_to', 'recipient']
         for col in df.columns:
             col_lower = col.lower()
             if any(keyword in col_lower for keyword in name_keywords):
                 column_mapping[col] = 'payee_name'
                 break
         
-        # Amount mapping
-        amount_keywords = ['amount', 'value', 'total', 'price', 'cost', 'invoice_amount', 'payment_amount']
+        amount_keywords = ['amount', 'value', 'total', 'price', 'cost', 'invoice_amount']
         for col in df.columns:
             col_lower = col.lower()
             if any(keyword in col_lower for keyword in amount_keywords):
                 column_mapping[col] = 'amount'
                 break
         
-        # Rename columns
         if column_mapping:
             df = df.rename(columns=column_mapping)
             self.logger.info(f"Mapped columns: {column_mapping}")
@@ -208,26 +164,18 @@ class PayRealityEngine:
         return df
     
     def clean_name(self, name: str, config: Dict = None) -> str:
-        """
-        Advanced name cleaning with configurable rules
-        """
+        """Normalize vendor name for matching"""
         if pd.isna(name):
             return ""
         
-        # Merge default config with provided config
         rules = {
             'lowercase': True,
             'remove_punctuation': True,
             'remove_extra_spaces': True,
             'strip_suffixes': True,
-            'replace_numbers': False,
-            'remove_common_words': False,
-            'suffixes': [' ltd', ' inc', ' corp', ' llc', ' pty', 
-                        ' technologies', ' solutions', ' group', 
-                        ' holdings', ' international', ' systems',
-                        ' pty ltd', ' cc', ' partnership', ' and',
-                        ' the', ' co', ' company', ' enterprises',
-                        ' limited', ' corporation', ' incorporated']
+            'suffixes': [' ltd', ' inc', ' corp', ' llc', ' pty', ' technologies', ' solutions', 
+                        ' group', ' holdings', ' international', ' systems', ' pty ltd', ' cc',
+                        ' limited', ' corporation', ' incorporated', ' company', ' co']
         }
         
         if config:
@@ -241,172 +189,374 @@ class PayRealityEngine:
         if rules.get('remove_punctuation'):
             name = re.sub(r'[^\w\s]', ' ', name)
         
-        if rules.get('remove_common_words') and rules.get('remove_common_words') != False:
-            common_words = ['the', 'and', 'for', 'with', 'limited', 'company']
-            for word in common_words:
-                name = re.sub(rf'\b{word}\b', '', name)
-        
         if rules.get('strip_suffixes'):
             for suffix in rules['suffixes']:
                 if name.endswith(suffix):
                     name = name[: -len(suffix)]
                     break
         
-        if rules.get('replace_numbers'):
-            name = re.sub(r'\d+', '', name)
-        
         if rules.get('remove_extra_spaces'):
             name = ' '.join(name.split())
         
         return name.strip()
     
-    def advanced_fuzzy_match(self, payee: str, master_vendors: List[str], 
-                             threshold: int = 80, use_phonetic: bool = True) -> Tuple[Optional[str], int, str]:
+    def detect_obfuscation(self, payee: str) -> Tuple[bool, str, str]:
         """
-        Advanced fuzzy matching with multiple strategies
-        Returns: (matched_vendor, score, strategy_used)
+        Detect intentional obfuscation in vendor names
+        Returns: (is_obfuscated, cleaned_name, obfuscation_type)
         """
-        payee_clean = self.clean_name(payee)
+        original = payee
         
-        # Strategy 1: Direct match after cleaning
+        # Common obfuscation patterns
+        patterns = [
+            (r'[mM]\.?[iI]\.?[cC]\.?[rR]\.?[oO]\.?[sS]\.?[oO]\.?[fF]\.?[tT]', 'microsoft'),
+            (r'[gG]\.?[oO]\.?[oO]\.?[gG]\.?[lL]\.?[eE]', 'google'),
+            (r'[aA]\.?[mM]\.?[aA]\.?[zZ]\.?[oO]\.?[nN]', 'amazon'),
+            (r'[dD]\.?[eE]\.?[lL]\.?[lL]', 'dell'),
+            (r'[iI]\.?[bB]\.?[mM]', 'ibm'),
+            (r'[aA]\.?[pP]\.?[pP]\.?[lL]\.?[eE]', 'apple'),
+            (r'[cC]\.?[oO]\.?[cC]\.?[aA]\.?[cC]\.?[oO]\.?[lL]\.?[aA]', 'coca-cola'),
+            (r'[mM]\.?[cC]\.?[dD]\.?[oO]\.?[nN]\.?[aA]\.?[lL]\.?[dD]\.?[sS]', 'mcdonalds'),
+        ]
+        
+        for pattern, replacement in patterns:
+            if re.search(pattern, original, re.IGNORECASE):
+                cleaned = re.sub(pattern, replacement, original, flags=re.IGNORECASE)
+                return True, cleaned, "dot_obfuscation"
+        
+        # Check for leetspeak (3 = E, 0 = O, 1 = I, etc)
+        leet_map = {'3': 'e', '0': 'o', '1': 'i', '4': 'a', '5': 's', '7': 't'}
+        leet_detected = False
+        cleaned = original
+        for leet, letter in leet_map.items():
+            if leet in cleaned.lower():
+                cleaned = cleaned.replace(leet, letter)
+                leet_detected = True
+        
+        if leet_detected:
+            return True, cleaned, "leetspeak"
+        
+        # Check for repeated characters (e.g., "Miiiicrosooft")
+        if re.search(r'(.)\1{2,}', original):
+            cleaned = re.sub(r'(.)\1{2,}', r'\1\1', original)
+            return True, cleaned, "character_repetition"
+        
+        return False, original, "none"
+    
+    def phonetic_match(self, text1: str, text2: str) -> float:
+        """Simple phonetic similarity for matching"""
+        # Remove vowels for rough phonetic matching
+        text1 = re.sub(r'[aeiou]', '', text1.lower())
+        text2 = re.sub(r'[aeiou]', '', text2.lower())
+        
+        # Common phonetic substitutions
+        text1 = re.sub(r'(ph|gh)', 'f', text1)
+        text2 = re.sub(r'(ph|gh)', 'f', text2)
+        text1 = re.sub(r'(ck|c)', 'k', text1)
+        text2 = re.sub(r'(ck|c)', 'k', text2)
+        text1 = re.sub(r'(sh|ch)', 'x', text1)
+        text2 = re.sub(r'(sh|ch)', 'x', text2)
+        
+        # Calculate similarity
+        if text1 == text2:
+            return 100.0
+        
+        return fuzz.token_sort_ratio(text1, text2)
+    
+    def semantic_match_7pass(self, payee: str, master_vendors: List[str], threshold: int = 80) -> Tuple[Optional[str], int, str]:
+        """
+        7-Pass Semantic Matching:
+        Pass 1: Exact match
+        Pass 2: Normalized match (cleaned)
+        Pass 3: Token sort ratio
+        Pass 4: Partial ratio
+        Pass 5: Levenshtein distance (via rapidfuzz)
+        Pass 6: Phonetic match
+        Pass 7: Obfuscation detection
+        """
+        payee_original = payee
+        
+        # Pass 1: Exact match
+        for vendor in master_vendors:
+            if payee == vendor:
+                return vendor, 100, "exact"
+        
+        # Pass 2: Normalized match (cleaned)
+        payee_clean = self.clean_name(payee)
         for vendor in master_vendors:
             vendor_clean = self.clean_name(vendor)
             if payee_clean == vendor_clean:
-                return vendor, 100, "exact_clean"
+                return vendor, 100, "normalized"
         
-        # Strategy 2: Token sort ratio (handles word order)
-        result = process.extractOne(
-            payee_clean, 
-            [self.clean_name(v) for v in master_vendors],
-            scorer=fuzz.token_sort_ratio
-        )
-        
+        # Pass 3: Token sort ratio (handles word order)
+        result = process.extractOne(payee_clean, [self.clean_name(v) for v in master_vendors], scorer=fuzz.token_sort_ratio)
         if result and result[1] >= threshold:
-            idx = result[2]
-            return master_vendors[idx], result[1], "token_sort"
+            return master_vendors[result[2]], result[1], "token_sort"
         
-        # Strategy 3: Partial ratio (handles extra words)
-        result = process.extractOne(
-            payee_clean,
-            [self.clean_name(v) for v in master_vendors],
-            scorer=fuzz.partial_ratio
-        )
-        
+        # Pass 4: Partial ratio (handles extra words)
+        result = process.extractOne(payee_clean, [self.clean_name(v) for v in master_vendors], scorer=fuzz.partial_ratio)
         if result and result[1] >= threshold:
-            idx = result[2]
-            return master_vendors[idx], result[1], "partial"
+            return master_vendors[result[2]], result[1], "partial"
         
-        # Strategy 4: Phonetic matching (for similar sounding names)
-        if use_phonetic:
-            def phonetic_key(word):
-                word = word.lower()
-                # Simple soundex-like matching
-                word = re.sub(r'[aeiou]', '', word)
-                word = re.sub(r'(ph|gh)', 'f', word)
-                word = re.sub(r'(ck|c)', 'k', word)
-                word = re.sub(r'(sh|ch)', 'x', word)
-                word = re.sub(r'(tion|sion)', 'shun', word)
-                return word[:10]
-            
-            payee_phonetic = phonetic_key(payee_clean)
-            for i, vendor in enumerate(master_vendors):
-                vendor_phonetic = phonetic_key(self.clean_name(vendor))
-                if payee_phonetic == vendor_phonetic:
-                    return vendor, 85, "phonetic"
+        # Pass 5: Levenshtein distance (via QRatio for better performance)
+        result = process.extractOne(payee_clean, [self.clean_name(v) for v in master_vendors], scorer=fuzz.QRatio)
+        if result and result[1] >= threshold - 5:
+            return master_vendors[result[2]], result[1], "levenshtein"
         
-        # Strategy 5: Quick ratio (last resort)
-        result = process.extractOne(
-            payee_clean,
-            [self.clean_name(v) for v in master_vendors],
-            scorer=fuzz.QRatio
-        )
+        # Pass 6: Phonetic match
+        payee_phonetic = self.clean_name(payee)
+        for vendor in master_vendors:
+            vendor_phonetic = self.clean_name(vendor)
+            phonetic_score = self.phonetic_match(payee_phonetic, vendor_phonetic)
+            if phonetic_score >= threshold:
+                return vendor, phonetic_score, "phonetic"
         
-        if result and result[1] >= threshold - 10:
-            idx = result[2]
-            return master_vendors[idx], result[1], "quick"
+        # Pass 7: Obfuscation detection
+        is_obfuscated, cleaned, obf_type = self.detect_obfuscation(payee)
+        if is_obfuscated:
+            result = process.extractOne(cleaned, [self.clean_name(v) for v in master_vendors], scorer=fuzz.token_sort_ratio)
+            if result and result[1] >= threshold:
+                return master_vendors[result[2]], result[1], f"obfuscation_{obf_type}"
         
         return None, 0, "none"
+    
+    def find_duplicate_vendors(self, payments_df: pd.DataFrame) -> List[Dict]:
+        """Find potential duplicate payments"""
+        duplicates = []
+        vendor_payments = defaultdict(list)
+        
+        for idx, row in payments_df.iterrows():
+            vendor = self.clean_name(row['payee_name'])
+            amount = row['amount']
+            vendor_payments[vendor].append({
+                'amount': amount,
+                'payee': row['payee_name'],
+                'index': idx
+            })
+        
+        for vendor, payments in vendor_payments.items():
+            if len(payments) > 1:
+                duplicates.append({
+                    'vendor': vendor,
+                    'display_name': payments[0]['payee'],
+                    'count': len(payments),
+                    'total': sum(p['amount'] for p in payments),
+                    'payments': payments
+                })
+        
+        return duplicates
+    
+    def calculate_risk_score(self, vendor_name: str, is_approved: bool, total_spend: float, 
+                             duplicate_count: int, weekend_count: int, 
+                             first_seen: str = None, last_seen: str = None, 
+                             payment_count: int = 0) -> Dict:
+        """Calculate risk score for a vendor with tenure and frequency"""
+        risk = 0
+        reasons = []
+        
+        if not is_approved:
+            risk += 20
+            reasons.append("Unapproved vendor")
+        
+        if total_spend > 1000000:
+            risk += 40
+            reasons.append(f"Total spend exceeds R1M")
+        elif total_spend > 500000:
+            risk += 30
+            reasons.append(f"Total spend exceeds R500K")
+        elif total_spend > 100000:
+            risk += 20
+            reasons.append(f"Total spend exceeds R100K")
+        elif total_spend > 50000:
+            risk += 10
+            reasons.append(f"Total spend exceeds R50K")
+        
+        if duplicate_count > 0:
+            risk += min(20, duplicate_count * 10)
+            reasons.append(f"{duplicate_count} potential duplicate payment(s)")
+        
+        if weekend_count > 0:
+            risk += min(10, weekend_count * 5)
+            reasons.append(f"{weekend_count} weekend payment(s)")
+        
+        if first_seen and last_seen:
+            try:
+                first = datetime.strptime(first_seen[:10], "%Y-%m-%d")
+                last = datetime.strptime(last_seen[:10], "%Y-%m-%d")
+                tenure_days = (last - first).days
+                
+                if tenure_days > 365:
+                    risk += 15
+                    reasons.append(f"Active for {tenure_days//365} years")
+                elif tenure_days > 180:
+                    risk += 10
+                    reasons.append(f"Active for {tenure_days//30} months")
+                elif tenure_days > 90:
+                    risk += 5
+                    reasons.append(f"Active for {tenure_days//30} months")
+            except:
+                pass
+        
+        if payment_count > 20:
+            risk += 10
+            reasons.append(f"{payment_count} payments (frequent)")
+        elif payment_count > 10:
+            risk += 5
+            reasons.append(f"{payment_count} payments (regular)")
+        
+        if last_seen:
+            try:
+                last = datetime.strptime(last_seen[:10], "%Y-%m-%d")
+                days_ago = (datetime.now() - last).days
+                if days_ago <= 30:
+                    risk += 5
+                    reasons.append("Active in last 30 days")
+            except:
+                pass
+        
+        risk = min(risk, 100)
+        
+        if risk >= 70:
+            level = "High"
+        elif risk >= 40:
+            level = "Medium"
+        else:
+            level = "Low"
+        
+        return {
+            'score': risk,
+            'level': level,
+            'reasons': reasons[:4],
+            'tenure_days': (datetime.strptime(last_seen[:10], "%Y-%m-%d") - datetime.strptime(first_seen[:10], "%Y-%m-%d")).days if first_seen and last_seen else 0,
+            'first_seen': first_seen,
+            'last_seen': last_seen,
+            'payment_count': payment_count
+        }
     
     def run_analysis(self, master_file: str, payments_file: str, 
                      threshold: int = 80, batch_size: int = 10000,
                      payments_format: str = None) -> Dict:
-        """
-        Main analysis engine with comprehensive results
-        """
         self.logger.info("=" * 60)
-        self.logger.info("Starting PayReality Analysis")
+        self.logger.info("Starting PayReality Analysis with 7-Pass Semantic Matching")
         self.logger.info("=" * 60)
         
-        # Load files
         master_df, payments_df = self.load_files(master_file, payments_file, payments_format)
         
-        # Get master vendor list
         master_vendors = master_df['vendor_name'].tolist()
         self.logger.info(f"Loaded {len(master_vendors):,} approved vendors")
         
-        # Process payments in batches
+        duplicates = self.find_duplicate_vendors(payments_df)
+        self.logger.info(f"Found {len(duplicates)} potential duplicate vendors")
+        
         total_payments = len(payments_df)
-        self.logger.info(f"Processing {total_payments:,} payments in batches of {batch_size:,}")
+        self.logger.info(f"Processing {total_payments:,} payments with 7-pass matching")
         
         results = []
         exceptions = []
         total_spend = 0
         exception_spend = 0
         match_stats = {
-            'exact_clean': 0,
-            'token_sort': 0,
-            'partial': 0,
-            'phonetic': 0,
-            'quick': 0,
-            'none': 0
+            'exact': 0, 'normalized': 0, 'token_sort': 0, 'partial': 0,
+            'levenshtein': 0, 'phonetic': 0, 'obfuscation': 0, 'none': 0
         }
         
-        for start_idx in range(0, total_payments, batch_size):
-            end_idx = min(start_idx + batch_size, total_payments)
-            batch = payments_df.iloc[start_idx:end_idx]
-            
-            self.logger.info(f"Processing batch {start_idx//batch_size + 1}/{(total_payments + batch_size - 1)//batch_size} (rows {start_idx+1}-{end_idx})")
-            
-            for idx, row in batch.iterrows():
-                payee = row['payee_name']
-                amount = row['amount']
-                total_spend += amount
-                
-                # Try to match
-                matched_vendor, score, strategy = self.advanced_fuzzy_match(payee, master_vendors, threshold)
-                
-                is_exception = matched_vendor is None
-                match_stats[strategy] = match_stats.get(strategy, 0) + 1
-                
-                result = {
-                    'payee_name': payee,
-                    'matched_vendor': matched_vendor,
-                    'match_score': score,
-                    'match_strategy': strategy,
-                    'is_exception': is_exception,
-                    'amount': amount,
-                    'row_index': idx
-                }
-                
-                results.append(result)
-                
-                if is_exception:
-                    exceptions.append(result)
-                    exception_spend += amount
+        vendor_payments = defaultdict(list)
+        vendor_details = defaultdict(lambda: {
+            'payments': [],
+            'first_seen': None,
+            'last_seen': None,
+            'count': 0,
+            'weekend_count': 0,
+            'total_spend': 0
+        })
         
-        # Calculate Control Entropy Score
+        for idx, row in payments_df.iterrows():
+            payee = row['payee_name']
+            amount = row['amount']
+            payment_date = row.get('payment_date', '')
+            total_spend += amount
+            
+            matched_vendor, score, strategy = self.semantic_match_7pass(payee, master_vendors, threshold)
+            
+            is_exception = matched_vendor is None
+            match_stats[strategy] = match_stats.get(strategy, 0) + 1
+            
+            result = {
+                'payee_name': payee,
+                'matched_vendor': matched_vendor,
+                'match_score': score,
+                'match_strategy': strategy,
+                'is_exception': is_exception,
+                'amount': amount,
+                'row_index': idx
+            }
+            
+            results.append(result)
+            vendor_payments[payee].append(result)
+            
+            # Track vendor details for risk scoring
+            vendor_details[payee]['payments'].append(result)
+            vendor_details[payee]['count'] += 1
+            vendor_details[payee]['total_spend'] += amount
+            
+            if payment_date:
+                if not vendor_details[payee]['first_seen'] or payment_date < vendor_details[payee]['first_seen']:
+                    vendor_details[payee]['first_seen'] = payment_date
+                if not vendor_details[payee]['last_seen'] or payment_date > vendor_details[payee]['last_seen']:
+                    vendor_details[payee]['last_seen'] = payment_date
+                
+                try:
+                    date_obj = pd.to_datetime(payment_date)
+                    if date_obj.dayofweek >= 5:
+                        vendor_details[payee]['weekend_count'] += 1
+                except:
+                    pass
+            
+            if is_exception:
+                exceptions.append(result)
+                exception_spend += amount
+        
+        # Calculate risk scores for exceptions
+        exception_with_risk = []
+        for ex in exceptions:
+            vendor = ex['payee_name']
+            details = vendor_details.get(vendor, {})
+            
+            risk = self.calculate_risk_score(
+                vendor,
+                not ex['is_exception'],
+                details.get('total_spend', 0),
+                sum(1 for d in duplicates if d['display_name'] == vendor),
+                details.get('weekend_count', 0),
+                details.get('first_seen'),
+                details.get('last_seen'),
+                details.get('count', 0)
+            )
+            
+            ex_with_risk = ex.copy()
+            ex_with_risk['risk_score'] = risk['score']
+            ex_with_risk['risk_level'] = risk['level']
+            ex_with_risk['risk_reasons'] = risk['reasons']
+            ex_with_risk['first_seen'] = risk.get('first_seen', '')
+            ex_with_risk['last_seen'] = risk.get('last_seen', '')
+            ex_with_risk['payment_count'] = risk.get('payment_count', 0)
+            ex_with_risk['tenure_days'] = risk.get('tenure_days', 0)
+            exception_with_risk.append(ex_with_risk)
+        
         entropy_score = (exception_spend / total_spend * 100) if total_spend > 0 else 0
         
         self.match_stats = match_stats
         
         self.logger.info("=" * 60)
-        self.logger.info("Analysis Complete")
+        self.logger.info("Analysis Complete - 7-Pass Semantic Matching Results")
+        self.logger.info("=" * 60)
         self.logger.info(f"Total Payments: {len(results):,}")
         self.logger.info(f"Total Spend: R {total_spend:,.2f}")
         self.logger.info(f"Exceptions Found: {len(exceptions):,}")
         self.logger.info(f"Exception Spend: R {exception_spend:,.2f}")
         self.logger.info(f"Control Entropy Score: {entropy_score:.2f}%")
-        self.logger.info(f"Match Strategy Distribution:")
+        self.logger.info(f"Duplicate Vendors Found: {len(duplicates)}")
+        self.logger.info("Match Strategy Distribution:")
         for strategy, count in sorted(match_stats.items(), key=lambda x: x[1], reverse=True):
             percentage = (count / len(results) * 100) if len(results) > 0 else 0
             self.logger.info(f"  {strategy}: {count:,} ({percentage:.1f}%)")
@@ -414,7 +564,8 @@ class PayRealityEngine:
         
         return {
             'results': results,
-            'exceptions': exceptions,
+            'exceptions': exception_with_risk,
+            'duplicates': duplicates,
             'total_payments': len(results),
             'total_spend': total_spend,
             'exception_count': len(exceptions),
@@ -425,6 +576,5 @@ class PayRealityEngine:
         }
     
     def generate_data_hash(self, df: pd.DataFrame) -> str:
-        """Generate a hash of the data for audit purposes"""
         data_string = df.to_csv(index=False).encode('utf-8')
         return hashlib.sha256(data_string).hexdigest()[:16]

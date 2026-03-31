@@ -283,3 +283,339 @@
 2026-03-31 02:00:05,700 - PayReality - INFO - ============================================================
 2026-03-31 02:00:05,702 - PayReality - INFO - ============================================================
 2026-03-31 02:00:05,702 - PayReality - INFO - ============================================================
+2026-03-31 02:00:05,704 - PayReality - INFO - Loading and validating input files
+2026-03-31 02:00:05,704 - PayReality - INFO - Loading and validating input files
+2026-03-31 02:00:05,707 - PayReality - INFO - ============================================================
+2026-03-31 02:00:05,707 - PayReality - INFO - ============================================================
+2026-03-31 02:00:05,708 - PayReality - INFO - Validating Vendor Master: C:/Users/user/Downloads/vendor_master.csv
+2026-03-31 02:00:05,708 - PayReality - INFO - Validating Vendor Master: C:/Users/user/Downloads/vendor_master.csv
+2026-03-31 02:00:05,709 - PayReality - INFO - File size: 141 bytes
+2026-03-31 02:00:05,709 - PayReality - INFO - File size: 141 bytes
+2026-03-31 02:00:05,746 - PayReality - INFO - Successfully read file with utf-8 encoding
+2026-03-31 02:00:05,746 - PayReality - INFO - Successfully read file with utf-8 encoding
+2026-03-31 02:00:05,747 - PayReality - INFO - Loaded 5 rows, 2 columns
+2026-03-31 02:00:05,747 - PayReality - INFO - Loaded 5 rows, 2 columns
+2026-03-31 02:00:05,777 - PayReality - INFO - Parsing csv file: C:/Users/user/Downloads/payments.csv
+2026-03-31 02:00:05,777 - PayReality - INFO - Parsing csv file: C:/Users/user/Downloads/payments.csv
+2026-03-31 02:00:05,782 - PayReality - INFO - Successfully parsed CSV with utf-8 encoding
+2026-03-31 02:00:05,782 - PayReality - INFO - Successfully parsed CSV with utf-8 encoding
+2026-03-31 02:00:05,784 - PayReality - INFO - Parsed 10 payment records
+2026-03-31 02:00:05,784 - PayReality - INFO - Parsed 10 payment records
+2026-03-31 02:00:05,789 - PayReality - INFO - Loaded 5 approved vendors
+2026-03-31 02:00:05,789 - PayReality - INFO - Loaded 5 approved vendors
+2026-03-31 02:00:05,790 - PayReality - INFO - Processing 10 payments in batches of 10,000
+2026-03-31 02:00:05,790 - PayReality - INFO - Processing 10 payments in batches of 10,000
+2026-03-31 02:00:05,792 - PayReality - INFO - Processing batch 1/1 (rows 1-10)
+2026-03-31 02:00:05,792 - PayReality - INFO - Processing batch 1/1 (rows 1-10)
+2026-03-31 02:00:05,809 - PayReality - INFO - ============================================================
+2026-03-31 02:00:05,809 - PayReality - INFO - ============================================================
+2026-03-31 02:00:05,810 - PayReality - INFO - Analysis Complete
+2026-03-31 02:00:05,810 - PayReality - INFO - Analysis Complete
+2026-03-31 02:00:05,811 - PayReality - INFO - Total Payments: 10
+2026-03-31 02:00:05,811 - PayReality - INFO - Total Payments: 10
+2026-03-31 02:00:05,813 - PayReality - INFO - Total Spend: R 106,200.00
+2026-03-31 02:00:05,813 - PayReality - INFO - Total Spend: R 106,200.00
+2026-03-31 02:00:05,814 - PayReality - INFO - Exceptions Found: 2
+2026-03-31 02:00:05,814 - PayReality - INFO - Exceptions Found: 2
+2026-03-31 02:00:05,815 - PayReality - INFO - Exception Spend: R 43,000.00
+2026-03-31 02:00:05,815 - PayReality - INFO - Exception Spend: R 43,000.00
+2026-03-31 02:00:05,817 - PayReality - INFO - Control Entropy Score: 40.49%
+2026-03-31 02:00:05,817 - PayReality - INFO - Control Entropy Score: 40.49%
+2026-03-31 02:00:05,818 - PayReality - INFO - Match Strategy Distribution:
+2026-03-31 02:00:05,818 - PayReality - INFO - Match Strategy Distribution:
+2026-03-31 02:00:05,819 - PayReality - INFO -   partial: 4 (40.0%)
+2026-03-31 02:00:05,819 - PayReality - INFO -   partial: 4 (40.0%)
+2026-03-31 02:00:05,820 - PayReality - INFO -   exact_clean: 2 (20.0%)
+2026-03-31 02:00:05,820 - PayReality - INFO -   exact_clean: 2 (20.0%)
+2026-03-31 02:00:05,821 - PayReality - INFO -   token_sort: 2 (20.0%)
+2026-03-31 02:00:05,821 - PayReality - INFO -   token_sort: 2 (20.0%)
+2026-03-31 02:00:05,822 - PayReality - INFO -   none: 2 (20.0%)
+2026-03-31 02:00:05,822 - PayReality - INFO -   none: 2 (20.0%)
+2026-03-31 02:00:05,823 - PayReality - INFO -   phonetic: 0 (0.0%)
+2026-03-31 02:00:05,823 - PayReality - INFO -   phonetic: 0 (0.0%)
+2026-03-31 02:00:05,824 - PayReality - INFO -   quick: 0 (0.0%)
+2026-03-31 02:00:05,824 - PayReality - INFO -   quick: 0 (0.0%)
+2026-03-31 02:00:05,825 - PayReality - INFO - ============================================================
+2026-03-31 02:00:05,825 - PayReality - INFO - ============================================================
+2026-03-31 02:00:07,152 - PayReality - INFO - Generating PDF report: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_sean_20260331_020007.pdf
+2026-03-31 02:00:07,152 - PayReality - INFO - Generating PDF report: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_sean_20260331_020007.pdf
+2026-03-31 02:00:07,219 - PayReality - INFO - ✓ PDF report generated: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_sean_20260331_020007.pdf
+2026-03-31 03:29:06,130 - PayReality - INFO - ✓ Logging initialized: logs\payreality_20260331.log
+2026-03-31 03:29:06,134 - PayReality - INFO - PayReality engine initialized
+2026-03-31 03:29:06,134 - PayReality - INFO - PayReality engine initialized
+2026-03-31 03:29:06,135 - PayReality - INFO - ============================================================
+2026-03-31 03:29:06,135 - PayReality - INFO - ============================================================
+2026-03-31 03:29:06,135 - PayReality - INFO - Starting PayReality Analysis
+2026-03-31 03:29:06,135 - PayReality - INFO - Starting PayReality Analysis
+2026-03-31 03:29:06,136 - PayReality - INFO - ============================================================
+2026-03-31 03:29:06,136 - PayReality - INFO - ============================================================
+2026-03-31 03:29:06,137 - PayReality - INFO - ============================================================
+2026-03-31 03:29:06,137 - PayReality - INFO - ============================================================
+2026-03-31 03:29:06,137 - PayReality - INFO - Loading and validating input files
+2026-03-31 03:29:06,137 - PayReality - INFO - Loading and validating input files
+2026-03-31 03:29:06,138 - PayReality - INFO - ============================================================
+2026-03-31 03:29:06,138 - PayReality - INFO - ============================================================
+2026-03-31 03:29:06,139 - PayReality - INFO - File size: 141 bytes
+2026-03-31 03:29:06,139 - PayReality - INFO - File size: 141 bytes
+2026-03-31 03:29:06,164 - PayReality - INFO - Successfully read file with utf-8 encoding
+2026-03-31 03:29:06,164 - PayReality - INFO - Successfully read file with utf-8 encoding
+2026-03-31 03:29:06,165 - PayReality - INFO - Loaded 5 rows, 2 columns
+2026-03-31 03:29:06,165 - PayReality - INFO - Loaded 5 rows, 2 columns
+2026-03-31 03:29:06,183 - PayReality - INFO - Parsing csv file: C:/Users/user/Downloads/payments.csv
+2026-03-31 03:29:06,183 - PayReality - INFO - Parsing csv file: C:/Users/user/Downloads/payments.csv
+2026-03-31 03:29:06,198 - PayReality - INFO - Successfully parsed CSV with utf-8 encoding
+2026-03-31 03:29:06,198 - PayReality - INFO - Successfully parsed CSV with utf-8 encoding
+2026-03-31 03:29:06,200 - PayReality - INFO - Parsed 10 payment records
+2026-03-31 03:29:06,200 - PayReality - INFO - Parsed 10 payment records
+2026-03-31 03:29:06,204 - PayReality - INFO - Loaded 5 approved vendors
+2026-03-31 03:29:06,204 - PayReality - INFO - Loaded 5 approved vendors
+2026-03-31 03:29:06,207 - PayReality - INFO - Found 1 potential duplicate vendors
+2026-03-31 03:29:06,207 - PayReality - INFO - Found 1 potential duplicate vendors
+2026-03-31 03:29:06,208 - PayReality - INFO - Processing 10 payments
+2026-03-31 03:29:06,208 - PayReality - INFO - Processing 10 payments
+2026-03-31 03:29:06,220 - PayReality - INFO - ============================================================
+2026-03-31 03:29:06,220 - PayReality - INFO - ============================================================
+2026-03-31 03:29:06,220 - PayReality - INFO - Analysis Complete
+2026-03-31 03:29:06,220 - PayReality - INFO - Analysis Complete
+2026-03-31 03:29:06,221 - PayReality - INFO - Total Payments: 10
+2026-03-31 03:29:06,221 - PayReality - INFO - Total Payments: 10
+2026-03-31 03:29:06,222 - PayReality - INFO - Total Spend: R 106,200.00
+2026-03-31 03:29:06,222 - PayReality - INFO - Total Spend: R 106,200.00
+2026-03-31 03:29:06,223 - PayReality - INFO - Exceptions Found: 2
+2026-03-31 03:29:06,223 - PayReality - INFO - Exceptions Found: 2
+2026-03-31 03:29:06,224 - PayReality - INFO - Exception Spend: R 43,000.00
+2026-03-31 03:29:06,224 - PayReality - INFO - Exception Spend: R 43,000.00
+2026-03-31 03:29:06,225 - PayReality - INFO - Control Entropy Score: 40.49%
+2026-03-31 03:29:06,225 - PayReality - INFO - Control Entropy Score: 40.49%
+2026-03-31 03:29:06,225 - PayReality - INFO - Duplicate Vendors Found: 1
+2026-03-31 03:29:06,225 - PayReality - INFO - Duplicate Vendors Found: 1
+2026-03-31 03:29:06,225 - PayReality - INFO - ============================================================
+2026-03-31 03:29:06,225 - PayReality - INFO - ============================================================
+2026-03-31 03:29:06,381 - PayReality - INFO - Generating PDF report: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_Sean_20260331_032906.pdf
+2026-03-31 03:29:06,381 - PayReality - INFO - Generating PDF report: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_Sean_20260331_032906.pdf
+2026-03-31 03:29:06,411 - PayReality - INFO - PDF report generated: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_Sean_20260331_032906.pdf
+2026-03-31 03:29:06,411 - PayReality - INFO - PDF report generated: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_Sean_20260331_032906.pdf
+2026-03-31 03:36:38,725 - PayReality - INFO - ✓ Logging initialized: logs\payreality_20260331.log
+2026-03-31 03:36:38,727 - PayReality - INFO - PayReality engine initialized
+2026-03-31 03:36:38,727 - PayReality - INFO - PayReality engine initialized
+2026-03-31 03:36:38,728 - PayReality - INFO - ============================================================
+2026-03-31 03:36:38,728 - PayReality - INFO - ============================================================
+2026-03-31 03:36:38,728 - PayReality - INFO - Starting PayReality Analysis
+2026-03-31 03:36:38,728 - PayReality - INFO - Starting PayReality Analysis
+2026-03-31 03:36:38,728 - PayReality - INFO - ============================================================
+2026-03-31 03:36:38,728 - PayReality - INFO - ============================================================
+2026-03-31 03:36:38,728 - PayReality - INFO - ============================================================
+2026-03-31 03:36:38,728 - PayReality - INFO - ============================================================
+2026-03-31 03:36:38,729 - PayReality - INFO - Loading and validating input files
+2026-03-31 03:36:38,729 - PayReality - INFO - Loading and validating input files
+2026-03-31 03:36:38,729 - PayReality - INFO - ============================================================
+2026-03-31 03:36:38,729 - PayReality - INFO - ============================================================
+2026-03-31 03:36:38,730 - PayReality - INFO - File size: 141 bytes
+2026-03-31 03:36:38,730 - PayReality - INFO - File size: 141 bytes
+2026-03-31 03:36:38,733 - PayReality - INFO - Successfully read file with utf-8 encoding
+2026-03-31 03:36:38,733 - PayReality - INFO - Successfully read file with utf-8 encoding
+2026-03-31 03:36:38,734 - PayReality - INFO - Loaded 5 rows, 2 columns
+2026-03-31 03:36:38,734 - PayReality - INFO - Loaded 5 rows, 2 columns
+2026-03-31 03:36:38,739 - PayReality - INFO - Parsing csv file: C:/Users/user/Downloads/payments.csv
+2026-03-31 03:36:38,739 - PayReality - INFO - Parsing csv file: C:/Users/user/Downloads/payments.csv
+2026-03-31 03:36:38,742 - PayReality - INFO - Successfully parsed CSV with utf-8 encoding
+2026-03-31 03:36:38,742 - PayReality - INFO - Successfully parsed CSV with utf-8 encoding
+2026-03-31 03:36:38,742 - PayReality - INFO - Parsed 10 payment records
+2026-03-31 03:36:38,742 - PayReality - INFO - Parsed 10 payment records
+2026-03-31 03:36:38,744 - PayReality - INFO - Loaded 5 approved vendors
+2026-03-31 03:36:38,744 - PayReality - INFO - Loaded 5 approved vendors
+2026-03-31 03:36:38,746 - PayReality - INFO - Found 1 potential duplicate vendors
+2026-03-31 03:36:38,746 - PayReality - INFO - Found 1 potential duplicate vendors
+2026-03-31 03:36:38,747 - PayReality - INFO - Processing 10 payments
+2026-03-31 03:36:38,747 - PayReality - INFO - Processing 10 payments
+2026-03-31 03:36:38,760 - PayReality - INFO - ============================================================
+2026-03-31 03:36:38,760 - PayReality - INFO - ============================================================
+2026-03-31 03:36:38,761 - PayReality - INFO - Analysis Complete
+2026-03-31 03:36:38,761 - PayReality - INFO - Analysis Complete
+2026-03-31 03:36:38,761 - PayReality - INFO - Total Payments: 10
+2026-03-31 03:36:38,761 - PayReality - INFO - Total Payments: 10
+2026-03-31 03:36:38,762 - PayReality - INFO - Total Spend: R 106,200.00
+2026-03-31 03:36:38,762 - PayReality - INFO - Total Spend: R 106,200.00
+2026-03-31 03:36:38,763 - PayReality - INFO - Exceptions Found: 2
+2026-03-31 03:36:38,763 - PayReality - INFO - Exceptions Found: 2
+2026-03-31 03:36:38,764 - PayReality - INFO - Exception Spend: R 43,000.00
+2026-03-31 03:36:38,764 - PayReality - INFO - Exception Spend: R 43,000.00
+2026-03-31 03:36:38,764 - PayReality - INFO - Control Entropy Score: 40.49%
+2026-03-31 03:36:38,764 - PayReality - INFO - Control Entropy Score: 40.49%
+2026-03-31 03:36:38,765 - PayReality - INFO - Duplicate Vendors Found: 1
+2026-03-31 03:36:38,765 - PayReality - INFO - Duplicate Vendors Found: 1
+2026-03-31 03:36:38,765 - PayReality - INFO - ============================================================
+2026-03-31 03:36:38,765 - PayReality - INFO - ============================================================
+2026-03-31 03:36:38,983 - PayReality - INFO - Generating PDF report: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_sean_20260331_033638.pdf
+2026-03-31 03:36:38,983 - PayReality - INFO - Generating PDF report: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_sean_20260331_033638.pdf
+2026-03-31 03:36:39,011 - PayReality - INFO - PDF report generated: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_sean_20260331_033638.pdf
+2026-03-31 03:36:39,011 - PayReality - INFO - PDF report generated: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_sean_20260331_033638.pdf
+2026-03-31 12:44:47,879 - PayReality - INFO - ✓ Logging initialized: logs\payreality_20260331.log
+2026-03-31 12:44:47,884 - PayReality - INFO - PayReality engine initialized
+2026-03-31 12:44:47,884 - PayReality - INFO - PayReality engine initialized
+2026-03-31 12:44:47,885 - PayReality - INFO - ============================================================
+2026-03-31 12:44:47,885 - PayReality - INFO - ============================================================
+2026-03-31 12:44:47,886 - PayReality - INFO - Starting PayReality Analysis
+2026-03-31 12:44:47,886 - PayReality - INFO - Starting PayReality Analysis
+2026-03-31 12:44:47,886 - PayReality - INFO - ============================================================
+2026-03-31 12:44:47,886 - PayReality - INFO - ============================================================
+2026-03-31 12:44:47,887 - PayReality - INFO - ============================================================
+2026-03-31 12:44:47,887 - PayReality - INFO - ============================================================
+2026-03-31 12:44:47,889 - PayReality - INFO - Loading and validating input files
+2026-03-31 12:44:47,889 - PayReality - INFO - Loading and validating input files
+2026-03-31 12:44:47,889 - PayReality - INFO - ============================================================
+2026-03-31 12:44:47,889 - PayReality - INFO - ============================================================
+2026-03-31 12:44:47,891 - PayReality - INFO - File size: 5,198 bytes
+2026-03-31 12:44:47,891 - PayReality - INFO - File size: 5,198 bytes
+2026-03-31 12:44:47,929 - PayReality - INFO - Successfully read file with utf-8 encoding
+2026-03-31 12:44:47,929 - PayReality - INFO - Successfully read file with utf-8 encoding
+2026-03-31 12:44:47,930 - PayReality - INFO - Loaded 95 rows, 6 columns
+2026-03-31 12:44:47,930 - PayReality - INFO - Loaded 95 rows, 6 columns
+2026-03-31 12:44:47,946 - PayReality - INFO - Parsing excel file: C:/Users/user/OneDrive/Desktop/Payreality/payreality/data/test_data/sample_payments.xlsx
+2026-03-31 12:44:47,946 - PayReality - INFO - Parsing excel file: C:/Users/user/OneDrive/Desktop/Payreality/payreality/data/test_data/sample_payments.xlsx
+2026-03-31 12:44:48,480 - PayReality - INFO - Found 1 sheets: ['Sheet1']
+2026-03-31 12:44:48,480 - PayReality - INFO - Found 1 sheets: ['Sheet1']
+2026-03-31 12:44:48,629 - PayReality - INFO - Using sheet: Sheet1
+2026-03-31 12:44:48,629 - PayReality - INFO - Using sheet: Sheet1
+2026-03-31 12:44:48,632 - PayReality - INFO - Parsed 1000 payment records
+2026-03-31 12:44:48,632 - PayReality - INFO - Parsed 1000 payment records
+2026-03-31 12:44:48,635 - PayReality - INFO - Loaded 95 approved vendors
+2026-03-31 12:44:48,635 - PayReality - INFO - Loaded 95 approved vendors
+2026-03-31 12:44:48,691 - PayReality - INFO - Found 134 potential duplicate vendors
+2026-03-31 12:44:48,691 - PayReality - INFO - Found 134 potential duplicate vendors
+2026-03-31 12:44:48,692 - PayReality - INFO - Processing 1,000 payments
+2026-03-31 12:44:48,692 - PayReality - INFO - Processing 1,000 payments
+2026-03-31 12:44:49,113 - PayReality - INFO - ============================================================
+2026-03-31 12:44:49,113 - PayReality - INFO - ============================================================
+2026-03-31 12:44:49,114 - PayReality - INFO - Analysis Complete
+2026-03-31 12:44:49,114 - PayReality - INFO - Analysis Complete
+2026-03-31 12:44:49,115 - PayReality - INFO - Total Payments: 1,000
+2026-03-31 12:44:49,115 - PayReality - INFO - Total Payments: 1,000
+2026-03-31 12:44:49,117 - PayReality - INFO - Total Spend: R 24,293,069.30
+2026-03-31 12:44:49,117 - PayReality - INFO - Total Spend: R 24,293,069.30
+2026-03-31 12:44:49,117 - PayReality - INFO - Exceptions Found: 60
+2026-03-31 12:44:49,117 - PayReality - INFO - Exceptions Found: 60
+2026-03-31 12:44:49,118 - PayReality - INFO - Exception Spend: R 1,227,626.01
+2026-03-31 12:44:49,118 - PayReality - INFO - Exception Spend: R 1,227,626.01
+2026-03-31 12:44:49,118 - PayReality - INFO - Control Entropy Score: 5.05%
+2026-03-31 12:44:49,118 - PayReality - INFO - Control Entropy Score: 5.05%
+2026-03-31 12:44:49,119 - PayReality - INFO - Duplicate Vendors Found: 134
+2026-03-31 12:44:49,119 - PayReality - INFO - Duplicate Vendors Found: 134
+2026-03-31 12:44:49,119 - PayReality - INFO - ============================================================
+2026-03-31 12:44:49,119 - PayReality - INFO - ============================================================
+2026-03-31 12:44:49,136 - PayReality - INFO - Generating PDF report: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_test_20260331_124449.pdf
+2026-03-31 12:44:49,136 - PayReality - INFO - Generating PDF report: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_test_20260331_124449.pdf
+2026-03-31 12:44:49,168 - PayReality - INFO - PDF report generated: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_test_20260331_124449.pdf
+2026-03-31 12:44:49,168 - PayReality - INFO - PDF report generated: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_test_20260331_124449.pdf
+2026-03-31 12:45:06,171 - PayReality - INFO - ✓ Logging initialized: logs\payreality_20260331.log
+2026-03-31 12:45:06,355 - PayReality - INFO - PayReality engine initialized
+2026-03-31 12:45:06,355 - PayReality - INFO - PayReality engine initialized
+2026-03-31 12:45:06,356 - PayReality - INFO - ============================================================
+2026-03-31 12:45:06,356 - PayReality - INFO - ============================================================
+2026-03-31 12:45:06,356 - PayReality - INFO - Starting PayReality Analysis
+2026-03-31 12:45:06,356 - PayReality - INFO - Starting PayReality Analysis
+2026-03-31 12:45:06,357 - PayReality - INFO - ============================================================
+2026-03-31 12:45:06,357 - PayReality - INFO - ============================================================
+2026-03-31 12:45:06,358 - PayReality - INFO - ============================================================
+2026-03-31 12:45:06,358 - PayReality - INFO - ============================================================
+2026-03-31 12:45:06,358 - PayReality - INFO - Loading and validating input files
+2026-03-31 12:45:06,358 - PayReality - INFO - Loading and validating input files
+2026-03-31 12:45:06,359 - PayReality - INFO - ============================================================
+2026-03-31 12:45:06,359 - PayReality - INFO - ============================================================
+2026-03-31 12:45:06,360 - PayReality - INFO - File size: 5,198 bytes
+2026-03-31 12:45:06,360 - PayReality - INFO - File size: 5,198 bytes
+2026-03-31 12:45:06,362 - PayReality - INFO - Successfully read file with utf-8 encoding
+2026-03-31 12:45:06,362 - PayReality - INFO - Successfully read file with utf-8 encoding
+2026-03-31 12:45:06,363 - PayReality - INFO - Loaded 95 rows, 6 columns
+2026-03-31 12:45:06,363 - PayReality - INFO - Loaded 95 rows, 6 columns
+2026-03-31 12:45:06,366 - PayReality - INFO - Parsing excel file: C:/Users/user/OneDrive/Desktop/Payreality/payreality/data/test_data/sample_payments.xlsx
+2026-03-31 12:45:06,366 - PayReality - INFO - Parsing excel file: C:/Users/user/OneDrive/Desktop/Payreality/payreality/data/test_data/sample_payments.xlsx
+2026-03-31 12:45:06,372 - PayReality - INFO - Found 1 sheets: ['Sheet1']
+2026-03-31 12:45:06,372 - PayReality - INFO - Found 1 sheets: ['Sheet1']
+2026-03-31 12:45:06,512 - PayReality - INFO - Using sheet: Sheet1
+2026-03-31 12:45:06,512 - PayReality - INFO - Using sheet: Sheet1
+2026-03-31 12:45:06,513 - PayReality - INFO - Parsed 1000 payment records
+2026-03-31 12:45:06,513 - PayReality - INFO - Parsed 1000 payment records
+2026-03-31 12:45:06,515 - PayReality - INFO - Loaded 95 approved vendors
+2026-03-31 12:45:06,515 - PayReality - INFO - Loaded 95 approved vendors
+2026-03-31 12:45:06,571 - PayReality - INFO - Found 134 potential duplicate vendors
+2026-03-31 12:45:06,571 - PayReality - INFO - Found 134 potential duplicate vendors
+2026-03-31 12:45:06,572 - PayReality - INFO - Processing 1,000 payments
+2026-03-31 12:45:06,572 - PayReality - INFO - Processing 1,000 payments
+2026-03-31 12:45:07,013 - PayReality - INFO - ============================================================
+2026-03-31 12:45:07,013 - PayReality - INFO - ============================================================
+2026-03-31 12:45:07,014 - PayReality - INFO - Analysis Complete
+2026-03-31 12:45:07,014 - PayReality - INFO - Analysis Complete
+2026-03-31 12:45:07,014 - PayReality - INFO - Total Payments: 1,000
+2026-03-31 12:45:07,014 - PayReality - INFO - Total Payments: 1,000
+2026-03-31 12:45:07,015 - PayReality - INFO - Total Spend: R 24,293,069.30
+2026-03-31 12:45:07,015 - PayReality - INFO - Total Spend: R 24,293,069.30
+2026-03-31 12:45:07,015 - PayReality - INFO - Exceptions Found: 60
+2026-03-31 12:45:07,015 - PayReality - INFO - Exceptions Found: 60
+2026-03-31 12:45:07,016 - PayReality - INFO - Exception Spend: R 1,227,626.01
+2026-03-31 12:45:07,016 - PayReality - INFO - Exception Spend: R 1,227,626.01
+2026-03-31 12:45:07,016 - PayReality - INFO - Control Entropy Score: 5.05%
+2026-03-31 12:45:07,016 - PayReality - INFO - Control Entropy Score: 5.05%
+2026-03-31 12:45:07,017 - PayReality - INFO - Duplicate Vendors Found: 134
+2026-03-31 12:45:07,017 - PayReality - INFO - Duplicate Vendors Found: 134
+2026-03-31 12:45:07,017 - PayReality - INFO - ============================================================
+2026-03-31 12:45:07,017 - PayReality - INFO - ============================================================
+2026-03-31 12:45:07,032 - PayReality - INFO - Generating PDF report: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_hu_20260331_124507.pdf
+2026-03-31 12:45:07,032 - PayReality - INFO - Generating PDF report: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_hu_20260331_124507.pdf
+2026-03-31 12:45:07,059 - PayReality - INFO - PDF report generated: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_hu_20260331_124507.pdf
+2026-03-31 12:45:07,059 - PayReality - INFO - PDF report generated: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_hu_20260331_124507.pdf
+2026-03-31 12:45:50,529 - PayReality - INFO - ✓ Logging initialized: logs\payreality_20260331.log
+2026-03-31 12:45:50,534 - PayReality - INFO - PayReality engine initialized
+2026-03-31 12:45:50,534 - PayReality - INFO - PayReality engine initialized
+2026-03-31 12:45:50,535 - PayReality - INFO - ============================================================
+2026-03-31 12:45:50,535 - PayReality - INFO - ============================================================
+2026-03-31 12:45:50,536 - PayReality - INFO - Starting PayReality Analysis
+2026-03-31 12:45:50,536 - PayReality - INFO - Starting PayReality Analysis
+2026-03-31 12:45:50,537 - PayReality - INFO - ============================================================
+2026-03-31 12:45:50,537 - PayReality - INFO - ============================================================
+2026-03-31 12:45:50,538 - PayReality - INFO - ============================================================
+2026-03-31 12:45:50,538 - PayReality - INFO - ============================================================
+2026-03-31 12:45:50,539 - PayReality - INFO - Loading and validating input files
+2026-03-31 12:45:50,539 - PayReality - INFO - Loading and validating input files
+2026-03-31 12:45:50,541 - PayReality - INFO - ============================================================
+2026-03-31 12:45:50,541 - PayReality - INFO - ============================================================
+2026-03-31 12:45:50,543 - PayReality - INFO - File size: 5,198 bytes
+2026-03-31 12:45:50,543 - PayReality - INFO - File size: 5,198 bytes
+2026-03-31 12:45:50,545 - PayReality - INFO - Successfully read file with utf-8 encoding
+2026-03-31 12:45:50,545 - PayReality - INFO - Successfully read file with utf-8 encoding
+2026-03-31 12:45:50,547 - PayReality - INFO - Loaded 95 rows, 6 columns
+2026-03-31 12:45:50,547 - PayReality - INFO - Loaded 95 rows, 6 columns
+2026-03-31 12:45:50,549 - PayReality - INFO - Parsing csv file: C:/Users/user/OneDrive/Desktop/Payreality/payreality/data/test_data/payments.csv
+2026-03-31 12:45:50,549 - PayReality - INFO - Parsing csv file: C:/Users/user/OneDrive/Desktop/Payreality/payreality/data/test_data/payments.csv
+2026-03-31 12:45:50,667 - PayReality - INFO - Successfully parsed CSV with utf-8 encoding
+2026-03-31 12:45:50,667 - PayReality - INFO - Successfully parsed CSV with utf-8 encoding
+2026-03-31 12:45:50,668 - PayReality - INFO - Parsed 50000 payment records
+2026-03-31 12:45:50,668 - PayReality - INFO - Parsed 50000 payment records
+2026-03-31 12:45:50,670 - PayReality - INFO - Loaded 95 approved vendors
+2026-03-31 12:45:50,670 - PayReality - INFO - Loaded 95 approved vendors
+2026-03-31 12:45:53,400 - PayReality - INFO - Found 1653 potential duplicate vendors
+2026-03-31 12:45:53,400 - PayReality - INFO - Found 1653 potential duplicate vendors
+2026-03-31 12:45:53,401 - PayReality - INFO - Processing 50,000 payments
+2026-03-31 12:45:53,401 - PayReality - INFO - Processing 50,000 payments
+2026-03-31 12:46:17,616 - PayReality - INFO - ============================================================
+2026-03-31 12:46:17,616 - PayReality - INFO - ============================================================
+2026-03-31 12:46:17,617 - PayReality - INFO - Analysis Complete
+2026-03-31 12:46:17,617 - PayReality - INFO - Analysis Complete
+2026-03-31 12:46:17,618 - PayReality - INFO - Total Payments: 50,000
+2026-03-31 12:46:17,618 - PayReality - INFO - Total Payments: 50,000
+2026-03-31 12:46:17,619 - PayReality - INFO - Total Spend: R 1,227,212,240.18
+2026-03-31 12:46:17,619 - PayReality - INFO - Total Spend: R 1,227,212,240.18
+2026-03-31 12:46:17,620 - PayReality - INFO - Exceptions Found: 4,192
+2026-03-31 12:46:17,620 - PayReality - INFO - Exceptions Found: 4,192
+2026-03-31 12:46:17,621 - PayReality - INFO - Exception Spend: R 83,127,289.80
+2026-03-31 12:46:17,621 - PayReality - INFO - Exception Spend: R 83,127,289.80
+2026-03-31 12:46:17,622 - PayReality - INFO - Control Entropy Score: 6.77%
+2026-03-31 12:46:17,622 - PayReality - INFO - Control Entropy Score: 6.77%
+2026-03-31 12:46:17,622 - PayReality - INFO - Duplicate Vendors Found: 1653
+2026-03-31 12:46:17,622 - PayReality - INFO - Duplicate Vendors Found: 1653
+2026-03-31 12:46:17,623 - PayReality - INFO - ============================================================
+2026-03-31 12:46:17,623 - PayReality - INFO - ============================================================
+2026-03-31 12:46:17,640 - PayReality - INFO - Generating PDF report: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_test_20260331_124617.pdf
+2026-03-31 12:46:17,640 - PayReality - INFO - Generating PDF report: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_test_20260331_124617.pdf
+2026-03-31 12:46:17,674 - PayReality - INFO - PDF report generated: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_test_20260331_124617.pdf
+2026-03-31 12:46:17,674 - PayReality - INFO - PDF report generated: C:\Users\user\Desktop\PayReality_Reports\PayReality_Report_test_20260331_124617.pdf
