@@ -1,128 +1,100 @@
-# PayReality  
-### Independent Control Validation for Internal Audit
+
+# PayReality
+## Independent Control Validation for Internal Audit
 
 PayReality is a forensic desktop application that verifies whether payments processed by an ERP system actually went to approved vendors.
 
 Traditional ERP controls rely on exact or near-exact matching. PayReality applies a multi-layered semantic approach to uncover discrepancies caused by typos, aliases, phonetic variations, or deliberate obfuscation.
 
-> **Did the money go where the system says it did?**
+**Did the money go where the system says it did?**
 
 ---
 
 ## Overview
 
-Internal audit teams rely on ERP controls to enforce vendor integrity. However, these controls are **syntactic** — they validate format, not meaning.
+Internal audit teams rely on ERP controls to enforce vendor integrity. However, these controls are syntactic — they validate format, not meaning.
 
 PayReality introduces an independent validation layer that tests whether those controls actually work in practice.
 
-- Analyzes 100% of transactions  
-- Requires no integrations  
-- Runs entirely offline  
+- Analyzes 100% of transactions
+- Requires no integrations
+- Runs entirely offline
 
 ---
 
 ## Core Capabilities
 
 ### Semantic Control Engine (7-Pass Matching)
-
 Detects hidden mismatches using layered analysis:
-
-- Exact  
-- Normalized  
-- Token Sort  
-- Partial  
-- Levenshtein  
-- Phonetic  
-- Obfuscation  
+- Exact
+- Normalized
+- Token Sort
+- Partial
+- Levenshtein
+- Phonetic
+- Obfuscation
 
 Identifies cases where payments appear valid but are not truly linked to approved vendors.
 
----
-
 ### Control Entropy Score
-
-Measures the percentage of total spend that bypassed approved vendor controls.
-
-Provides a direct indicator of control effectiveness, not just isolated failures.
-
----
+Measures the percentage of total spend that bypassed approved vendor controls. Provides a direct indicator of control effectiveness, not just isolated failures.
 
 ### Risk Scoring
-
 Automatically classifies findings based on:
+- Spend magnitude
+- Vendor tenure
+- Duplicate patterns
+- Weekend or off-cycle payments
 
-- Spend magnitude  
-- Vendor tenure  
-- Duplicate patterns  
-- Weekend or off-cycle payments  
-
-Outputs:
-- High Risk  
-- Medium Risk  
-- Low Risk  
-
----
+**Outputs:**
+- High Risk
+- Medium Risk
+- Low Risk
 
 ### Tenure Tracking
-
 Tracks vendor lifecycle behavior:
-
-- First seen  
-- Last seen  
-- Number of payments  
-- Active duration  
-
----
+- First seen
+- Last seen
+- Number of payments
+- Active duration
 
 ### Vendor Master Health Score
-
 Evaluates structural quality of the vendor master:
-
-- Duplicate rate  
-- Dormancy  
-- Orphan records  
-- Data completeness  
-- Format consistency  
-
----
+- Duplicate rate
+- Dormancy
+- Orphan records
+- Data completeness
+- Format consistency
 
 ### Audit-Ready Reporting
-
 Generates professional PDF reports including:
-
-- Executive summary  
-- Risk overview  
-- Detailed exceptions  
-- Actionable recommendations  
+- Executive summary
+- Risk overview
+- Detailed exceptions
+- Actionable recommendations
 
 Supports automatic email delivery via SMTP.
 
----
-
 ### History and Trend Analysis
-
-- Stores analyses in a local SQLite database  
-- Tracks trends over time  
-- Exportable to Excel  
-
----
+- Stores analyses in a local SQLite database
+- Tracks trends over time
+- Exportable to Excel
 
 ### Privacy-First Architecture
-
-- Fully offline  
-- No data leaves your machine  
-- No external integrations  
+- Fully offline
+- No data leaves your machine
+- No external integrations
 
 ---
 
 ## Why PayReality
 
 Most tools:
-- Enforce controls  
-- Reconcile transactions  
-- Monitor activity  
+- Enforce controls
+- Reconcile transactions
+- Monitor activity
 
-**PayReality verifies whether the control itself is trustworthy.**
+PayReality verifies whether the control itself is trustworthy.
 
 It acts as an independent validation layer within the audit process.
 
@@ -131,11 +103,8 @@ It acts as an independent validation layer within the audit process.
 ## Quick Start
 
 ### Prerequisites
-
 - Python 3.10+
 - pip
-
----
 
 ### Installation
 
@@ -144,85 +113,97 @@ git clone https://github.com/Ghee9ine/Payreality.git
 cd Payreality
 
 python -m venv venv
+```
 
-Activate virtual environment:
+**Activate virtual environment:**
 
-macOS/Linux
-
+*macOS/Linux:*
+```bash
 source venv/bin/activate
+```
 
-Windows
-
+*Windows:*
+```bash
 venv\Scripts\activate
+```
 
-Install dependencies:
-
+**Install dependencies:**
+```bash
 pip install -r requirements.txt
-Run the Application
+```
+
+### Run the Application
+
+```bash
 python payreality_app.py
-Usage
-1. Select Input Files
+```
 
-Vendor Master
+---
 
-CSV or Excel
-Must contain a vendor name column
-(e.g., vendor_name, supplier, name)
+## Usage
 
-Payments
+### 1. Select Input Files
 
-CSV, Excel, or PDF
-Must contain:
-payee_name
-amount
-2. Run Analysis
-Click Run Analysis
-Enter a client name
-Monitor progress via the status bar
-3. Review Results
+**Vendor Master**
+- CSV or Excel
+- Must contain a vendor name column (e.g., `vendor_name`, `supplier`, `name`)
 
-Dashboard
+**Payments**
+- CSV, Excel, or PDF
+- Must contain:
+  - `payee_name`
+  - `amount`
 
-KPI cards
-Exception list
-Trend chart
+### 2. Run Analysis
+- Click **Run Analysis**
+- Enter a client name
+- Monitor progress via the status bar
 
-History
+### 3. Review Results
 
-Past analyses
-Export to Excel
+**Dashboard**
+- KPI cards
+- Exception list
+- Trend chart
 
-Reports
+**History**
+- Past analyses
+- Export to Excel
 
-Generated PDFs
-Open within the app
+**Reports**
+- Generated PDFs
+- Open within the app
 
-Email
-
-Configure SMTP for automatic delivery
+**Email**
+- Configure SMTP for automatic delivery
 
 Reports are saved to:
-
+```
 Desktop/PayReality_Reports/
-File Requirements
-File Type	Required Columns
-Vendor Master	vendor_name (or similar)
-Payments	payee_name, amount
+```
 
-Supported formats:
+---
 
-CSV
-Excel (.xlsx, .xls)
-PDF
-Sage CSV
-Configuration
+## File Requirements
 
-After first run, edit:
+| File Type | Required Columns |
+|-----------|------------------|
+| Vendor Master | `vendor_name` (or similar) |
+| Payments | `payee_name`, `amount` |
 
-payreality_config.json
+**Supported formats:**
+- CSV
+- Excel (.xlsx, .xls)
+- PDF
+- Sage CSV
 
-Example:
+---
 
+## Configuration
+
+After first run, edit `payreality_config.json`:
+
+```json
 {
   "thresholds": {
     "exact": 100,
@@ -234,13 +215,24 @@ Example:
     "obfuscation": 80
   }
 }
-Troubleshooting
-Problem	Solution
-Missing columns	Rename to payee_name and amount
-File not found	Use file browser
-Empty file	Ensure at least one row
-PDF extraction fails	Ensure PDF contains selectable text (OCR requires Tesseract)
-Project Structure
+```
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| Missing columns | Rename to `payee_name` and `amount` |
+| File not found | Use file browser |
+| Empty file | Ensure at least one row |
+| PDF extraction fails | Ensure PDF contains selectable text (OCR requires Tesseract) |
+
+---
+
+## Project Structure
+
+```
 Payreality/
 ├── src/
 │   ├── core.py
@@ -255,19 +247,42 @@ Payreality/
 ├── generate_test_data.py
 ├── requirements.txt
 └── README.md
-License
+```
+
+---
+
+## License
 
 Proprietary – AI Securewatch
 
-Contact
+---
 
-AI Securewatch
-Email: sean@aisecurewatch.com
+## Contact
 
-GitHub: https://github.com/Ghee9ine/Payreality
+**AI Securewatch**  
+Email: sean@aisecurewatch.com  
+GitHub: [https://github.com/Ghee9ine/Payreality](https://github.com/Ghee9ine/Payreality)
 
-Final Note
+---
+
+## Final Note
 
 PayReality is designed to be run as part of every audit cycle.
 
 If vendor controls have not been independently validated, their effectiveness cannot be assumed.
+```
+
+## Key Fixes Made:
+
+1. **Added proper Markdown formatting** with headers, code blocks, and tables
+2. **Fixed inconsistent bullet points** and list formatting
+3. **Improved code block syntax highlighting** with language specifiers
+4. **Added proper table formatting** for file requirements and troubleshooting
+5. **Organized content with clear section dividers** using horizontal rules
+6. **Fixed indentation** in project structure section
+7. **Added consistent formatting** for commands and file paths
+8. **Improved visual hierarchy** with proper heading levels
+9. **Fixed missing language markers** in code blocks
+10. **Added proper formatting** for the configuration JSON example
+
+The README is now well-structured, easier to read, and follows best practices for Markdown documentation.
