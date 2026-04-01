@@ -10,19 +10,29 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 from pathlib import Path
 
+
 class PayRealityConfig:
     def __init__(self, config_file: str = "payreality_config.json"):
         self.config_file = config_file
+        self.setup_logging()       # must come before load_config
         self.config = self.load_config()
-        self.setup_logging()
         self.validate_config()
-    
+
     def load_config(self) -> Dict[str, Any]:
         """Load configuration from file or create default"""
         default_config = {
             'version': '1.0.0',
             'matching': {
-                'threshold': 80,
+                'thresholds': {
+                    'exact': 100,
+                    'normalized': 100,
+                    'token_sort': 80,
+                    'partial': 80,
+                    'levenshtein': 75,
+                    'phonetic': 80,
+                    'obfuscation': 80
+                },
+                'use_batch_matching': True,   # enable batch processing for fuzzy passes
                 'use_phonetic': True,
                 'batch_size': 10000,
                 'name_cleaning': {
@@ -30,9 +40,11 @@ class PayRealityConfig:
                     'remove_punctuation': True,
                     'strip_suffixes': True,
                     'remove_common_words': True,
-                    'suffixes': ['ltd', 'inc', 'corp', 'llc', 'pty', 
-                                'technologies', 'solutions', 'group', 
-                                'holdings', 'international', 'systems']
+                    'suffixes': [
+                        'ltd', 'inc', 'corp', 'llc', 'pty',
+                        'technologies', 'solutions', 'group',
+                        'holdings', 'international', 'systems'
+                    ]
                 }
             },
             'reporting': {
@@ -63,21 +75,18 @@ class PayRealityConfig:
                 'save_full_results': False
             }
         }
-        
+
         if os.path.exists(self.config_file):
             try:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     loaded = json.load(f)
-                    # Update default with loaded values
                     self._deep_update(default_config, loaded)
-                    self.logger = logging.getLogger('PayReality')
-                    print(f"✓ Loaded configuration from {self.config_file}")
+                self.logger.info(f"Loaded configuration from {self.config_file}")
             except Exception as e:
-                print(f"⚠ Error loading config: {e}")
-                print("Using default configuration")
-        
+                self.logger.warning(f"Error loading config: {e}. Using defaults.")
+
         return default_config
-    
+
     def _deep_update(self, target: Dict, source: Dict):
         """Recursively update nested dictionaries"""
         for key, value in source.items():
@@ -85,7 +94,7 @@ class PayRealityConfig:
                 self._deep_update(target[key], value)
             else:
                 target[key] = value
-    
+
     def save_config(self):
         """Save current configuration to file"""
         try:
@@ -96,15 +105,16 @@ class PayRealityConfig:
         except Exception as e:
             self.logger.error(f"Error saving config: {e}")
             return False
-    
+
     def setup_logging(self):
         """Setup professional logging with file rotation"""
         log_dir = "logs"
         os.makedirs(log_dir, exist_ok=True)
-        
-        log_file = os.path.join(log_dir, f"payreality_{datetime.now().strftime('%Y%m%d')}.log")
-        
-        # Configure root logger
+
+        log_file = os.path.join(
+            log_dir, f"payreality_{datetime.now().strftime('%Y%m%d')}.log"
+        )
+
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -113,35 +123,35 @@ class PayRealityConfig:
                 logging.StreamHandler()
             ]
         )
-        
+
         self.logger = logging.getLogger('PayReality')
-        self.logger.info(f"✓ Logging initialized: {log_file}")
-    
+        self.logger.info(f"Logging initialized: {log_file}")
+
     def validate_config(self):
         """Validate configuration values"""
         errors = []
-        
-        # Validate matching threshold
-        threshold = self.get('matching.threshold', 80)
-        if not 0 <= threshold <= 100:
-            errors.append("matching.threshold must be between 0 and 100")
-        
+
+        # Validate thresholds
+        thresholds = self.get('matching.thresholds', {})
+        for name, val in thresholds.items():
+            if not isinstance(val, (int, float)) or not 0 <= val <= 100:
+                errors.append(f"matching.thresholds.{name} must be between 0 and 100")
+
         # Validate batch size
         batch_size = self.get('processing.batch_size', 10000)
         if batch_size < 100 or batch_size > 100000:
             errors.append("processing.batch_size should be between 100 and 100000")
-        
+
         # Validate max file size
         max_size = self.get('processing.max_file_size_mb', 500)
         if max_size < 1 or max_size > 10000:
             errors.append("processing.max_file_size_mb should be between 1 and 10000")
-        
-        if errors:
-            for error in errors:
-                self.logger.warning(f"Config validation: {error}")
-        
+
+        for error in errors:
+            self.logger.warning(f"Config validation: {error}")
+
         return len(errors) == 0
-    
+
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value using dot notation"""
         keys = key.split('.')
@@ -157,7 +167,7 @@ class PayRealityConfig:
             return value
         except (KeyError, TypeError, AttributeError):
             return default
-    
+
     def set(self, key: str, value: Any) -> bool:
         """Set configuration value using dot notation"""
         keys = key.split('.')
@@ -171,15 +181,14 @@ class PayRealityConfig:
             return True
         except (KeyError, TypeError):
             return False
-    
+
     def get_output_directory(self) -> str:
         """Get the output directory, with fallback to desktop"""
         output_dir = self.get('output.default_directory')
-        
+
         if output_dir and os.path.exists(output_dir):
             return output_dir
-        
-        # Fallback to desktop
+
         desktop = Path.home() / 'Desktop' / 'PayReality_Reports'
         desktop.mkdir(exist_ok=True)
         return str(desktop)

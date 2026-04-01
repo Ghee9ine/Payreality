@@ -1,25 +1,8 @@
-# Python cache
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-
-# Virtual environment
-venv/
-env/
-ENV/
-.venv/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
 # Generated files
+payreality_config.json
 logs/
 *.log
+*.csv
 *.xlsx
 *.pdf
 exceptions_*.csv
@@ -29,13 +12,19 @@ payreality_exceptions.csv
 payreality_*.pdf
 0
 
-# OS files
-.DS_Store
-Thumbs.db
+# Diagnostic scripts
+create_vendor_master.py
+diagnose.py
+diagnose_vendor.py
+src/diagnose.py
+vendor_master.csv
 
-# Configuration (if contains sensitive data)
-payreality_config.json
-
-# Reports
-PayReality_Reports/
-*.pdf
+# Python cache
+__pycache__/
+*.pyc
+# Diagnostic scripts
+create_vendor_master.py
+diagnose.py
+diagnose_vendor.py
+src/diagnose.py
+vendor_master.csv

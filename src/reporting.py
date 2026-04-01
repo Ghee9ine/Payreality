@@ -1,6 +1,6 @@
 """
 PayReality Reporting Module
-Professional PDF generation with 7-Pass Semantic Matching details
+Professional PDF generation with executive summaries, recommendations, and methodology
 """
 
 from reportlab.lib import colors
@@ -66,7 +66,7 @@ class PayRealityReport:
     
     def generate_report(self, results: dict, output_dir: str) -> str:
         """
-        Generate comprehensive PDF report with 7-Pass Semantic Matching details
+        Generate comprehensive PDF report with Vendor Master Health Score
         """
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"PayReality_Report_{self.client_name.replace(' ', '_')}_{timestamp}.pdf"
@@ -130,6 +130,85 @@ class PayRealityReport:
         """
         story.append(Paragraph(summary_text, self.styles['Normal']))
         story.append(Spacer(1, 20))
+        
+        # Vendor Master Health Score
+        health_report = results.get('health_report')
+        if health_report:
+            story.append(Paragraph("Vendor Master Health", self.section_style))
+            story.append(Spacer(1, 12))
+            
+            health_score = health_report['health_score']
+            health_level = health_report['health_level']
+            health_color = health_report['health_color']
+            
+            health_data = [
+                ["Metric", "Score", "Status"],
+                ["Overall Health", f"{health_score:.1f}%", health_level],
+                ["Completeness", f"{health_report['metrics']['completeness_score']:.1f}%", ""],
+                ["Duplicate Rate", f"{health_report['metrics']['duplicate_rate']:.1f}%", ""],
+                ["Format Quality", f"{health_report['metrics']['format_score']:.1f}%", ""],
+            ]
+            
+            if health_report['metrics']['dormancy_rate'] is not None:
+                health_data.append(["Dormancy Rate", f"{health_report['metrics']['dormancy_rate']:.1f}%", ""])
+                health_data.append(["Orphan Rate", f"{health_report['metrics']['orphan_rate']:.1f}%", ""])
+            
+            health_table = Table(health_data, colWidths=[2.5*inch, 1.5*inch, 1.5*inch])
+            health_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), self.colors['primary']),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('GRID', (0, 0), (-1, -1), 1, self.colors['gray']),
+                ('BACKGROUND', (0, 1), (-1, -1), self.colors['light_gray']),
+                ('TEXTCOLOR', (2, 1), (2, 1), colors.HexColor(health_color)),
+                ('FONTNAME', (2, 1), (2, 1), 'Helvetica-Bold'),
+            ]))
+            story.append(health_table)
+            story.append(Spacer(1, 20))
+            
+            # Duplicate Examples
+            if health_report['metrics']['duplicate_examples']:
+                story.append(Paragraph("Potential Duplicate Vendors", self.subsection_style))
+                story.append(Spacer(1, 8))
+                
+                dup_data = [["Normalized Name", "Variations", "Count"]]
+                for dup in health_report['metrics']['duplicate_examples'][:5]:
+                    dup_data.append([
+                        dup['normalized'][:40],
+                        ", ".join(dup['variations'][:2]),
+                        str(dup['count'])
+                    ])
+                
+                dup_table = Table(dup_data, colWidths=[2*inch, 2.5*inch, 0.8*inch])
+                dup_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), self.colors['gray']),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('GRID', (0, 0), (-1, -1), 1, self.colors['gray']),
+                ]))
+                story.append(dup_table)
+                story.append(Spacer(1, 20))
+            
+            # Completeness Issues
+            if health_report['metrics']['completeness_issues']:
+                story.append(Paragraph("Vendors Missing Critical Data", self.subsection_style))
+                story.append(Spacer(1, 8))
+                
+                missing_data = [["Vendor Name", "Missing Fields"]]
+                for issue in health_report['metrics']['completeness_issues'][:10]:
+                    missing_data.append([
+                        issue['vendor'][:40],
+                        ", ".join(issue['missing_fields'])
+                    ])
+                
+                missing_table = Table(missing_data, colWidths=[3*inch, 2.5*inch])
+                missing_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), self.colors['gray']),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('GRID', (0, 0), (-1, -1), 1, self.colors['gray']),
+                ]))
+                story.append(missing_table)
+                story.append(Spacer(1, 20))
         
         # Control Entropy Score
         story.append(Paragraph("Control Entropy Score", self.section_style))
@@ -252,16 +331,14 @@ class PayRealityReport:
             max_exceptions = self.config.get('max_exceptions_in_report', 20)
             top_exceptions = sorted(exceptions, key=lambda x: x.get('amount', 0), reverse=True)[:max_exceptions]
             
-            exception_data = [["Vendor Name", "Amount", "First Seen", "Last Seen", "Payments", "Match Method", "Risk Level"]]
+            exception_data = [["Vendor Name", "Amount", "First Seen", "Last Seen", "Payments", "Risk Level"]]
             for ex in top_exceptions:
                 first_seen = ex.get('first_seen', '')[:10]
                 last_seen = ex.get('last_seen', '')[:10]
                 payment_count = ex.get('payment_count', 0)
                 risk_level = ex.get('risk_level', 'Low')
-                match_strategy = ex.get('match_strategy', 'none').replace('_', ' ').title()
                 tenure_days = ex.get('tenure_days', 0)
                 
-                # Format tenure
                 if tenure_days > 0:
                     if tenure_days > 365:
                         years = tenure_days // 365
@@ -276,28 +353,23 @@ class PayRealityReport:
                 else:
                     tenure_text = ""
                 
-                # Highlight obfuscation matches
-                if 'obfuscation' in match_strategy.lower():
-                    match_strategy = f"🔍 {match_strategy}"
-                
                 exception_data.append([
                     ex.get('payee_name', 'Unknown')[:45],
                     f"R {ex.get('amount', 0):,.2f}",
                     first_seen or "N/A",
                     last_seen or "N/A",
                     f"{payment_count} ({tenure_text})" if payment_count > 0 else "N/A",
-                    match_strategy,
                     risk_level
                 ])
             
-            exception_table = Table(exception_data, colWidths=[2.2*inch, 0.8*inch, 0.7*inch, 0.7*inch, 0.8*inch, 0.9*inch, 0.6*inch])
+            exception_table = Table(exception_data, colWidths=[2.5*inch, 1*inch, 0.8*inch, 0.8*inch, 1*inch, 0.7*inch])
             exception_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), self.colors['gray']),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                 ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 8),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
                 ('GRID', (0, 0), (-1, -1), 1, self.colors['gray']),
                 ('BACKGROUND', (0, 1), (-1, -1), self.colors['light_gray']),
             ]))
@@ -372,7 +444,8 @@ class PayRealityReport:
                 results.get('exception_count', 0), 
                 results.get('master_vendor_count', 0),
                 results.get('match_stats', {}),
-                len(results.get('duplicates', []))
+                len(results.get('duplicates', [])),
+                results.get('health_report')
             )
             
             for i, rec in enumerate(recommendations, 1):
@@ -389,7 +462,7 @@ class PayRealityReport:
             methodology_text = """
             PayReality performs independent control validation using the following approach:
             
-            <b>1. Data Extraction:</b> Raw vendor master and payment transaction data is extracted from your ERP system.
+            <b>1. Vendor Master Health Analysis:</b> The vendor master file is analyzed for data quality issues including completeness, duplicates, dormancy, and format quality.
             
             <b>2. 7-Pass Semantic Matching:</b> The actual payee name from each payment is compared against the approved vendor master 
             using seven progressive matching strategies:
@@ -469,7 +542,8 @@ class PayRealityReport:
     
     def _generate_recommendations(self, entropy: float, exception_count: int, 
                                    master_count: int, match_stats: Dict = None,
-                                   duplicate_count: int = 0) -> List[str]:
+                                   duplicate_count: int = 0,
+                                   health_report: Dict = None) -> List[str]:
         recommendations = []
         
         if entropy > 30:
@@ -489,6 +563,17 @@ class PayRealityReport:
         
         if entropy > 20:
             recommendations.append("Conduct root cause analysis to understand why controls are being bypassed")
+        
+        # Vendor Master Health recommendations
+        if health_report:
+            if health_report['metrics']['completeness_score'] < 70:
+                recommendations.append(f"Improve vendor master completeness - {health_report['metrics']['completeness_issues']} vendors missing critical data")
+            
+            if health_report['metrics']['duplicate_rate'] > 5:
+                recommendations.append(f"Clean up {health_report['metrics']['duplicate_count']} potential duplicate vendors")
+            
+            if health_report['metrics']['orphan_rate'] is not None and health_report['metrics']['orphan_rate'] > 30:
+                recommendations.append(f"Review {health_report['metrics']['orphan_rate']:.0f}% of vendors with no transactions for possible removal")
         
         # Obfuscation detection recommendation
         if match_stats and match_stats.get('obfuscation', 0) > 0:
