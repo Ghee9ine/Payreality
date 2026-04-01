@@ -1,26 +1,130 @@
-# PayReality
+# PayReality  
+### Independent Control Validation for Internal Audit
 
-**Independent Control Validation for Internal Audit**
+PayReality is a forensic desktop application that verifies whether payments processed by an ERP system actually went to approved vendors.
 
-PayReality is a professional desktop application that helps internal audit teams verify that all payments are made to approved vendors. It uses a powerful **7‑pass semantic matching engine** to catch typos, abbreviations, phonetic variations, and intentional obfuscation that ERPs miss.
+Traditional ERP controls rely on exact or near-exact matching. PayReality applies a multi-layered semantic approach to uncover discrepancies caused by typos, aliases, phonetic variations, or deliberate obfuscation.
+
+> **Did the money go where the system says it did?**
 
 ---
 
-## Features
+## Overview
 
-| Feature | Description |
-|---------|-------------|
-| **7‑pass semantic matching** | Exact → Normalized → Token Sort → Partial → Levenshtein → Phonetic → Obfuscation |
-| **Control Entropy Score** | Percentage of total spend that bypassed approved vendor controls |
-| **Risk scoring** | High / Medium / Low based on spend, tenure, duplicates, weekend payments |
-| **Tenure tracking** | First seen, last seen, payment count, active days |
-| **Vendor Master Health Score** | Completeness, duplicate rate, dormancy, orphan rate, format quality |
-| **PDF reports** | Professional, audit‑ready reports with executive summary, risk summary, recommendations |
-| **Email reports** | Automatic delivery of reports to configured recipients |
-| **History tracking** | SQLite database stores all analyses with trend chart |
-| **File parser** | Handles CSV, Excel, PDF, and Sage formats with auto‑column detection |
-| **Cross‑platform** | Works on Windows, macOS, Linux |
-| **Privacy‑first** | Data never leaves your machine – runs entirely offline |
+Internal audit teams rely on ERP controls to enforce vendor integrity. However, these controls are **syntactic** — they validate format, not meaning.
+
+PayReality introduces an independent validation layer that tests whether those controls actually work in practice.
+
+- Analyzes 100% of transactions  
+- Requires no integrations  
+- Runs entirely offline  
+
+---
+
+## Core Capabilities
+
+### Semantic Control Engine (7-Pass Matching)
+
+Detects hidden mismatches using layered analysis:
+
+- Exact  
+- Normalized  
+- Token Sort  
+- Partial  
+- Levenshtein  
+- Phonetic  
+- Obfuscation  
+
+Identifies cases where payments appear valid but are not truly linked to approved vendors.
+
+---
+
+### Control Entropy Score
+
+Measures the percentage of total spend that bypassed approved vendor controls.
+
+Provides a direct indicator of control effectiveness, not just isolated failures.
+
+---
+
+### Risk Scoring
+
+Automatically classifies findings based on:
+
+- Spend magnitude  
+- Vendor tenure  
+- Duplicate patterns  
+- Weekend or off-cycle payments  
+
+Outputs:
+- High Risk  
+- Medium Risk  
+- Low Risk  
+
+---
+
+### Tenure Tracking
+
+Tracks vendor lifecycle behavior:
+
+- First seen  
+- Last seen  
+- Number of payments  
+- Active duration  
+
+---
+
+### Vendor Master Health Score
+
+Evaluates structural quality of the vendor master:
+
+- Duplicate rate  
+- Dormancy  
+- Orphan records  
+- Data completeness  
+- Format consistency  
+
+---
+
+### Audit-Ready Reporting
+
+Generates professional PDF reports including:
+
+- Executive summary  
+- Risk overview  
+- Detailed exceptions  
+- Actionable recommendations  
+
+Supports automatic email delivery via SMTP.
+
+---
+
+### History and Trend Analysis
+
+- Stores analyses in a local SQLite database  
+- Tracks trends over time  
+- Exportable to Excel  
+
+---
+
+### Privacy-First Architecture
+
+- Fully offline  
+- No data leaves your machine  
+- No external integrations  
+
+---
+
+## Why PayReality
+
+Most tools:
+- Enforce controls  
+- Reconcile transactions  
+- Monitor activity  
+
+**PayReality verifies whether the control itself is trustworthy.**
+
+It acts as an independent validation layer within the audit process.
 
 ---
 
@@ -28,46 +132,99 @@ PayReality is a professional desktop application that helps internal audit teams
 
 ### Prerequisites
 
-- Python 3.10 or higher
-- pip (Python package manager)
+- Python 3.10+
+- pip
+
+---
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Ghee9ine/Payreality.git
-   cd Payreality
-Create a virtual environment
+```bash
+git clone https://github.com/Ghee9ine/Payreality.git
+cd Payreality
 
-bash
 python -m venv venv
-source venv/bin/activate   # On Windows: venv\Scripts\activate
-Install dependencies
 
-bash
+Activate virtual environment:
+
+macOS/Linux
+
+source venv/bin/activate
+
+Windows
+
+venv\Scripts\activate
+
+Install dependencies:
+
 pip install -r requirements.txt
-Run the application
-
-bash
+Run the Application
 python payreality_app.py
 Usage
-Step	Action
-1	Select Vendor Master file (CSV/Excel)
-2	Select Payments file (CSV/Excel/PDF)
-3	Click Run Analysis
-4	View results on Dashboard
-5	PDF report saved to Desktop/PayReality_Reports/
+1. Select Input Files
+
+Vendor Master
+
+CSV or Excel
+Must contain a vendor name column
+(e.g., vendor_name, supplier, name)
+
+Payments
+
+CSV, Excel, or PDF
+Must contain:
+payee_name
+amount
+2. Run Analysis
+Click Run Analysis
+Enter a client name
+Monitor progress via the status bar
+3. Review Results
+
+Dashboard
+
+KPI cards
+Exception list
+Trend chart
+
+History
+
+Past analyses
+Export to Excel
+
+Reports
+
+Generated PDFs
+Open within the app
+
+Email
+
+Configure SMTP for automatic delivery
+
+Reports are saved to:
+
+Desktop/PayReality_Reports/
 File Requirements
 File Type	Required Columns
 Vendor Master	vendor_name (or similar)
-Payments	payee_name and amount (or similar)
-Supported formats: CSV, Excel (.xlsx, .xls), PDF, Sage CSV.
+Payments	payee_name, amount
 
+Supported formats:
+
+CSV
+Excel (.xlsx, .xls)
+PDF
+Sage CSV
 Configuration
-You can adjust matching thresholds in payreality_config.json after the first run:
 
-json
-"thresholds": {
+After first run, edit:
+
+payreality_config.json
+
+Example:
+
+{
+  "thresholds": {
     "exact": 100,
     "normalized": 100,
     "token_sort": 80,
@@ -75,40 +232,42 @@ json
     "levenshtein": 75,
     "phonetic": 80,
     "obfuscation": 80
+  }
 }
 Troubleshooting
 Problem	Solution
-Missing required columns	Rename your columns to payee_name and amount. Check the sample files in data/sample/.
-File not found	Use the Browse buttons instead of typing paths.
-Empty file	Ensure your file has at least one row of data.
-PDF extraction fails	Ensure the PDF contains text (not just scanned images). OCR is supported but requires Tesseract.
+Missing columns	Rename to payee_name and amount
+File not found	Use file browser
+Empty file	Ensure at least one row
+PDF extraction fails	Ensure PDF contains selectable text (OCR requires Tesseract)
 Project Structure
-text
 Payreality/
 ├── src/
-│   ├── core.py          # 7‑pass matching engine, risk scoring, health analysis
-│   ├── parser.py        # CSV, Excel, PDF, Sage parser
-│   ├── reporting.py     # PDF report generator
-│   └── config.py        # Configuration management
+│   ├── core.py
+│   ├── parser.py
+│   ├── reporting.py
+│   └── config.py
 ├── data/
-│   ├── sample/          # Sample files for testing
-│   └── test_data/       # Large test datasets (generated)
-├── logs/                # Application logs
-├── payreality_app.py    # Main desktop application
+│   ├── sample/
+│   └── test_data/
+├── logs/
+├── payreality_app.py
 ├── generate_test_data.py
 ├── requirements.txt
-├── README.md
-└── .gitignore
+└── README.md
 License
+
 Proprietary – AI Securewatch
 
-This software is proprietary and confidential. Unauthorized copying, distribution, or use is strictly prohibited.
-
-For licensing inquiries, contact: sean@aisecurewatch.com
-
 Contact
+
 AI Securewatch
 Email: sean@aisecurewatch.com
+
 GitHub: https://github.com/Ghee9ine/Payreality
 
-“Your ERP monitors what it recognises. PayReality monitors what it ignores.”
+Final Note
+
+PayReality is designed to be run as part of every audit cycle.
+
+If vendor controls have not been independently validated, their effectiveness cannot be assumed.
