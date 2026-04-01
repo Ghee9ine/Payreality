@@ -2,7 +2,7 @@
 
 **Independent Control Validation for Internal Audit**
 
-PayReality is a professional desktop application that helps internal audit teams verify that all payments are made to approved vendors. It uses a powerful **7-pass semantic matching engine** to catch typos, abbreviations, phonetic variations, and intentional obfuscation that ERPs miss.
+PayReality is a professional desktop application that helps internal audit teams verify that all payments are made to approved vendors. It uses a powerful **7‑pass semantic matching engine** to catch typos, abbreviations, phonetic variations, and intentional obfuscation that ERPs miss.
 
 ---
 
@@ -12,7 +12,7 @@ PayReality is a professional desktop application that helps internal audit teams
 |---------|-------------|
 | **7‑pass semantic matching** | Exact → Normalized → Token Sort → Partial → Levenshtein → Phonetic → Obfuscation |
 | **Control Entropy Score** | Percentage of total spend that bypassed approved vendor controls |
-| **Risk scoring** | High/Medium/Low based on spend, tenure, duplicates, weekend payments |
+| **Risk scoring** | High / Medium / Low based on spend, tenure, duplicates, weekend payments |
 | **Tenure tracking** | First seen, last seen, payment count, active days |
 | **Vendor Master Health Score** | Completeness, duplicate rate, dormancy, orphan rate, format quality |
 | **PDF reports** | Professional, audit‑ready reports with executive summary, risk summary, recommendations |
@@ -37,67 +37,36 @@ PayReality is a professional desktop application that helps internal audit teams
    ```bash
    git clone https://github.com/Ghee9ine/Payreality.git
    cd Payreality
-   ```
+Create a virtual environment
 
-2. **Create a virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate   # On Windows: venv\Scripts\activate
-   ```
+bash
+python -m venv venv
+source venv/bin/activate   # On Windows: venv\Scripts\activate
+Install dependencies
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+bash
+pip install -r requirements.txt
+Run the application
 
-4. **Run the application**
-   ```bash
-   python payreality_app.py
-   ```
-
----
-
-## Usage
-
-### 1. Select Your Files
-
-- **Vendor Master** – a CSV or Excel file containing your approved vendor list.  
-  Must have a column with vendor names (e.g., `vendor_name`, `supplier`, `name`).
-
-- **Payments** – a CSV, Excel, or PDF file containing your payment transactions.  
-  Must have payee name and amount columns (e.g., `payee_name`, `amount`, `value`).
-
-### 2. Run Analysis
-
-Click **Run Analysis** and enter a client name. The progress bar will show the status.
-
-### 3. View Results
-
-- **Dashboard** – KPI cards, exceptions list, trend chart.
-- **History** – Table of all past analyses. Export to Excel.
-- **Reports** – List of generated PDF reports. Click **Open** to view.
-- **Email** – Configure SMTP settings to receive reports automatically.
-
-The PDF report is also saved to `Desktop/PayReality_Reports/`.
-
----
-
-## File Requirements
-
-| File Type | Required Columns |
-|-----------|------------------|
-| Vendor Master | `vendor_name` (or similar) |
-| Payments | `payee_name` and `amount` (or similar) |
-
+bash
+python payreality_app.py
+Usage
+Step	Action
+1	Select Vendor Master file (CSV/Excel)
+2	Select Payments file (CSV/Excel/PDF)
+3	Click Run Analysis
+4	View results on Dashboard
+5	PDF report saved to Desktop/PayReality_Reports/
+File Requirements
+File Type	Required Columns
+Vendor Master	vendor_name (or similar)
+Payments	payee_name and amount (or similar)
 Supported formats: CSV, Excel (.xlsx, .xls), PDF, Sage CSV.
 
----
+Configuration
+You can adjust matching thresholds in payreality_config.json after the first run:
 
-## Configuration
-
-You can adjust matching thresholds in `payreality_config.json` after the first run:
-
-```json
+json
 "thresholds": {
     "exact": 100,
     "normalized": 100,
@@ -107,24 +76,14 @@ You can adjust matching thresholds in `payreality_config.json` after the first r
     "phonetic": 80,
     "obfuscation": 80
 }
-```
-
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| **Missing required columns** | Rename your columns to `payee_name` and `amount`. Check the sample files in `data/sample/`. |
-| **File not found** | Use the **Browse** buttons instead of typing paths. |
-| **Empty file** | Ensure your file has at least one row of data. |
-| **PDF extraction fails** | Ensure the PDF contains text (not just scanned images). OCR is supported but requires Tesseract. |
-
----
-
-## Project Structure
-
-```
+Troubleshooting
+Problem	Solution
+Missing required columns	Rename your columns to payee_name and amount. Check the sample files in data/sample/.
+File not found	Use the Browse buttons instead of typing paths.
+Empty file	Ensure your file has at least one row of data.
+PDF extraction fails	Ensure the PDF contains text (not just scanned images). OCR is supported but requires Tesseract.
+Project Structure
+text
 Payreality/
 ├── src/
 │   ├── core.py          # 7‑pass matching engine, risk scoring, health analysis
@@ -140,22 +99,16 @@ Payreality/
 ├── requirements.txt
 ├── README.md
 └── .gitignore
-```
-
----
-
-## License
-
+License
 Proprietary – AI Securewatch
 
----
+This software is proprietary and confidential. Unauthorized copying, distribution, or use is strictly prohibited.
 
-## Contact
+For licensing inquiries, contact: sean@aisecurewatch.com
 
-**AI Securewatch**  
-Email: sean@aisecurewatch.com  
-GitHub: [https://github.com/Ghee9ine/Payreality](https://github.com/Ghee9ine/Payreality)
+Contact
+AI Securewatch
+Email: sean@aisecurewatch.com
+GitHub: https://github.com/Ghee9ine/Payreality
 
----
-
-*“Your ERP monitors what it recognises. PayReality monitors what it ignores.”
+“Your ERP monitors what it recognises. PayReality monitors what it ignores.”
