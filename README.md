@@ -2,7 +2,7 @@ Let's update your README to reflect the final product and make it clear, profess
 
 Here's the updated `README.md`:
 
-```markdown
+
 # PayReality
 
 **Independent Control Validation for Internal Audit**
