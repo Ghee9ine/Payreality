@@ -470,7 +470,3 @@ PayReality is designed to be run as part of every audit cycle. Not because we sa
 
 *Control Entropy. Know your number.*
 ```
-
-5. **Positions PayReality as a category creator**, not a feature vendor
-
-Copy everything above directly into your GitHub README.md. It will render perfectly.
