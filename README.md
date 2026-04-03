@@ -6,14 +6,15 @@
 
 PayReality is a forensic desktop application that verifies whether payments processed by an ERP system actually went to approved vendors.
 
-Traditional ERP controls rely on exact or near-exact matching. PayReality applies a multi-layered semantic approach to uncover discrepancies caused by typos, aliases, phonetic variations, or deliberate obfuscation.
+Traditional ERP controls enforce **syntactic compliance** — they validate format, not meaning. They cannot detect **identity hallucination** (vendor records that don't correspond to real entities) or **semantic drift** (the gradual divergence between legal names and payment system variations).
 
-But PayReality doesn't just find exceptions. It introduces a new audit metric: **The Control Entropy Score (CES)** — the first standardized measure of control effectiveness.
+PayReality applies a multi-layered semantic approach to uncover discrepancies caused by typos, aliases, phonetic variations, or deliberate obfuscation. And it introduces **Control Entropy** — the first metric for measuring control effectiveness degradation over time.
 
 ---
 
 ## Table of Contents
 
+- [The PayReality Vocabulary](#the-payreality-vocabulary)
 - [What is Control Entropy?](#what-is-control-entropy)
 - [Overview](#overview)
 - [Core Features](#core-features)
@@ -33,8 +34,55 @@ But PayReality doesn't just find exceptions. It introduces a new audit metric: *
 - [Configuration](#configuration)
 - [File Structure](#file-structure)
 - [Troubleshooting](#troubleshooting)
+- [Glossary](#glossary)
 - [License](#license)
 - [Contact](#contact)
+
+---
+
+## The PayReality Vocabulary
+
+Category definition requires new language. PayReality introduces four terms that every auditor will need to know:
+
+### Identity Hallucination
+
+An ERP system creates a vendor record. The record has a name, an address, a tax ID. But the vendor doesn't actually exist as a legal entity. The ERP has hallucinated an identity.
+
+**How it happens:** Data entry errors, system migrations, legacy imports, or deliberate fraud.
+
+**Why it matters:** Payments to hallucinated vendors are unrecoverable. The money is gone.
+
+**PayReality detects identity hallucination by:** Cross-referencing payment patterns, tenure anomalies, and structural vendor master inconsistencies.
+
+### Semantic Drift
+
+A vendor's legal name is "International Business Machines Corporation." Over time, your payment systems record it as "IBM," then "IBM Corp," then "IBM Global Services." Each variation is semantically identical but syntactically distinct.
+
+**How it happens:** Normal business operations, acquisitions, rebranding, or different departments using different conventions.
+
+**Why it matters:** Semantic drift creates false exceptions. Your ERP controls flag legitimate payments as violations. Audit hours wasted.
+
+**PayReality detects semantic drift by:** Applying 7-pass semantic matching to link variations to the same canonical vendor.
+
+### Control Entropy
+
+The measurable degradation of control effectiveness over time. Every control has a half-life. Without independent validation, you cannot know when a control has failed.
+
+**How it happens:** Process changes, personnel turnover, system updates, or deliberate evasion.
+
+**Why it matters:** A control that worked last quarter may not work this quarter. Control Entropy is the first metric that tracks this decay.
+
+**PayReality measures control entropy via:** The Control Entropy Score (CES), tracked over time and benchmarked against industry peers.
+
+### Syntactic Compliance
+
+The false sense of security when a payment passes format checks but fails meaning checks.
+
+**Example:** The payee name "Micros0ft" passes ERP validation (non-empty, correct length, valid characters). But the payment did not go to Microsoft.
+
+**Why it matters:** Most ERP controls only enforce syntactic compliance. They don't test semantic truth.
+
+**PayReality exposes syntactic compliance by:** Testing every payment against semantic meaning, not just format rules.
 
 ---
 
@@ -63,9 +111,9 @@ CES = (Unmatched Spend / Total Spend) × (1 - Confidence Weight) × Control Crit
 
 ## Overview
 
-Internal audit teams rely on ERP controls to enforce vendor integrity. However, these controls are syntactic — they validate format, not meaning.
+Internal audit teams rely on ERP controls to enforce vendor integrity. However, these controls are syntactically compliant — they validate format, not meaning.
 
-PayReality introduces an independent validation layer that tests whether those controls actually work in practice.
+PayReality introduces an independent validation layer that tests whether those controls actually work in practice. It detects identity hallucination, maps semantic drift, and quantifies control entropy.
 
 | Capability | PayReality |
 |------------|------------|
@@ -75,6 +123,9 @@ PayReality introduces an independent validation layer that tests whether those c
 | Full audit trail with run IDs | ✅ |
 | Professional PDF reports | ✅ |
 | Standardized control metric (CES) | ✅ |
+| Detects identity hallucination | ✅ |
+| Maps semantic drift | ✅ |
+| Quantifies control entropy | ✅ |
 
 ---
 
@@ -82,7 +133,7 @@ PayReality introduces an independent validation layer that tests whether those c
 
 ### 7-Pass Semantic Matching Engine
 
-Detects hidden mismatches using seven progressive matching strategies:
+Detects hidden mismatches using seven progressive matching strategies. This is how PayReality maps semantic drift across your payment systems.
 
 | Pass | Strategy | Description |
 |------|----------|-------------|
@@ -98,15 +149,15 @@ Detects hidden mismatches using seven progressive matching strategies:
 
 Each finding is mapped to a specific control type:
 
-| Control ID | Control Name | Severity |
-|------------|--------------|----------|
-| AVC | Approved Vendor Control | Critical |
-| OBC | Obfuscation Detection Control | Critical |
-| VDC | Vendor Duplication Control | High |
-| VNC | Vendor Name Consistency Control | High |
-| VTC | Vendor Tenure Control | High |
-| PAC | Payment Authorization Control | Medium |
-| VMH | Vendor Master Health Control | Medium |
+| Control ID | Control Name | Severity | Related Concept |
+|------------|--------------|----------|-----------------|
+| AVC | Approved Vendor Control | Critical | Syntactic Compliance |
+| OBC | Obfuscation Detection Control | Critical | Identity Hallucination |
+| VDC | Vendor Duplication Control | High | Semantic Drift |
+| VNC | Vendor Name Consistency Control | High | Semantic Drift |
+| VTC | Vendor Tenure Control | High | Identity Hallucination |
+| PAC | Payment Authorization Control | Medium | Control Entropy |
+| VMH | Vendor Master Health Control | Medium | Identity Hallucination |
 
 ### Control Entropy Score (CES)
 
@@ -146,13 +197,13 @@ Automatically classifies findings based on:
 
 ### Explainability Layer
 
-Every exception includes a human-readable explanation:
+Every exception includes a human-readable explanation that translates technical findings into audit language:
 
-> "Phonetic match detected between 'Micosoft' and 'Microsoft' with 94% similarity. Vendor tenure: 847 days active. Payment amount: $47,892 processed on Tuesday at 2:34 PM."
+> "Phonetic match detected between 'Micosoft' and 'Microsoft' with 94% similarity. This represents semantic drift. Vendor tenure: 847 days active. Payment amount: $47,892 processed on Tuesday at 2:34 PM."
 
-> "Payment processed on weekend, violating payment approval controls (CTL-004)."
+> "Payment processed on weekend, violating payment approval controls (CTL-004). Control Entropy Score impact: +4.7 points."
 
-> "Obfuscation detected via leetspeak (3=E, 0=O) — potential fraud indicator."
+> "Obfuscation detected via leetspeak (3=E, 0=O). Potential identity hallucination. Recommend immediate vendor verification."
 
 ### Audit Trail
 
@@ -170,11 +221,11 @@ All data stored locally in SQLite database with tamper-evident hashing.
 
 ### Vendor Master Health Scoring
 
-Evaluates structural quality of the vendor master:
+Evaluates structural quality of the vendor master to detect identity hallucination:
 
 - Total vendors
-- Duplicate records
-- Blank names
+- Duplicate records (semantic drift indicators)
+- Blank names (potential hallucinations)
 - Short names (potential junk data)
 - Overall health score (0-100)
 
@@ -191,7 +242,7 @@ Evaluates structural quality of the vendor master:
 
 ### Trend Analysis
 
-- Historical CES tracking over time
+- Historical CES tracking over time (control entropy visualization)
 - Visual trend chart on dashboard
 - Store unlimited analysis history
 - Export history to Excel
@@ -217,7 +268,9 @@ Most tools:
 
 **PayReality verifies whether the control itself is trustworthy.**
 
-It acts as an independent validation layer within the audit process. And it introduces the first standardized metric for control effectiveness: **The Control Entropy Score.**
+It acts as an independent validation layer within the audit process. It introduces the first standardized metric for control effectiveness: **The Control Entropy Score.**
+
+It gives auditors language for phenomena they've always seen but never named: **Identity Hallucination. Semantic Drift. Syntactic Compliance.**
 
 ---
 
@@ -287,7 +340,7 @@ python payreality_app.py
 **Dashboard**
 - KPI cards including CES
 - Exception list with risk scores
-- CES trend chart
+- CES trend chart (control entropy over time)
 
 **History**
 - Past analyses with CES tracking
@@ -374,6 +427,19 @@ Payreality/
 
 ---
 
+## Glossary
+
+| Term | Definition |
+|------|------------|
+| **Control Entropy** | The measurable degradation of control effectiveness over time. Expressed as the Control Entropy Score (CES). |
+| **Control Entropy Score (CES)** | A standardized metric (0-100) measuring control effectiveness. Lower is better. |
+| **Identity Hallucination** | An ERP vendor record that does not correspond to a real legal entity. |
+| **Semantic Drift** | The gradual divergence between a vendor's legal name and how they appear in payment systems. |
+| **Syntactic Compliance** | Passing format-based controls while failing semantic truth. |
+| **Independent Control Validation (ICV)** | The discipline of testing controls themselves, not just the transactions they process. |
+
+---
+
 ## License
 
 Proprietary – AI Securewatch
@@ -396,7 +462,7 @@ GitHub: https://github.com/Ghee9ine/Payreality
 
 **What's your Control Entropy Score?**
 
-If vendor controls have not been independently validated, their effectiveness cannot be assumed.
+If vendor controls have not been independently validated, their effectiveness cannot be assumed. Identity hallucination goes undetected. Semantic drift accumulates. Syntactic compliance creates false confidence.
 
 PayReality is designed to be run as part of every audit cycle. Not because we say so. Because the CES doesn't lie.
 
@@ -404,3 +470,7 @@ PayReality is designed to be run as part of every audit cycle. Not because we sa
 
 *Control Entropy. Know your number.*
 ```
+
+5. **Positions PayReality as a category creator**, not a feature vendor
+
+Copy everything above directly into your GitHub README.md. It will render perfectly.
