@@ -45,9 +45,10 @@ For 30 years, internal audit has relied on syntactic controls — matching chara
 **Control Entropy is the first metric that measures what actually matters: Did the control prevent the wrong payment?**
 
 The Control Entropy Score (CES) is to audit what the credit score is to lending: A standardized, defensible, comparable metric that changes how the industry thinks about risk.
-CES = (Unmatched Spend / Total Spend) × (1 - Confidence Weight) × Control Criticality
 
-text
+```
+CES = (Unmatched Spend / Total Spend) × (1 - Confidence Weight) × Control Criticality
+```
 
 | CES Range | Interpretation |
 |-----------|----------------|
@@ -147,11 +148,11 @@ Automatically classifies findings based on:
 
 Every exception includes a human-readable explanation:
 
-> *"Phonetic match detected between 'Micosoft' and 'Microsoft' with 94% similarity. Vendor tenure: 847 days active. Payment amount: $47,892 processed on Tuesday at 2:34 PM."*
+> "Phonetic match detected between 'Micosoft' and 'Microsoft' with 94% similarity. Vendor tenure: 847 days active. Payment amount: $47,892 processed on Tuesday at 2:34 PM."
 
-> *"Payment processed on weekend, violating payment approval controls (CTL-004)."*
+> "Payment processed on weekend, violating payment approval controls (CTL-004)."
 
-> *"Obfuscation detected via leetspeak (3=E, 0=O) — potential fraud indicator."*
+> "Obfuscation detected via leetspeak (3=E, 0=O) — potential fraud indicator."
 
 ### Audit Trail
 
@@ -232,81 +233,89 @@ It acts as an independent validation layer within the audit process. And it intr
 ```bash
 git clone https://github.com/Ghee9ine/Payreality.git
 cd Payreality
-Virtual Environment
-macOS/Linux:
+```
 
-bash
+### Virtual Environment
+
+**macOS/Linux:**
+```bash
 python -m venv venv
 source venv/bin/activate
-Windows:
+```
 
-bash
+**Windows:**
+```bash
 python -m venv venv
 venv\Scripts\activate
-Install Dependencies
-bash
+```
+
+### Install Dependencies
+
+```bash
 pip install -r requirements.txt
-Run Application
-bash
+```
+
+### Run Application
+
+```bash
 python payreality_app.py
-Usage Guide
-1. Select Input Files
-Vendor Master
+```
 
-CSV or Excel
+---
 
-Must contain a vendor name column (e.g., vendor_name, supplier, name)
+## Usage Guide
 
-Payments
+### 1. Select Input Files
 
-CSV, Excel, or PDF
+**Vendor Master**
+- CSV or Excel
+- Must contain a vendor name column (e.g., vendor_name, supplier, name)
 
-Must contain: payee_name, amount
+**Payments**
+- CSV, Excel, or PDF
+- Must contain: payee_name, amount
 
-2. Run Analysis
-Click Run Analysis
+### 2. Run Analysis
 
-Enter a client name
+- Click Run Analysis
+- Enter a client name
+- Monitor progress via the status bar
+- View your **Control Entropy Score** on the dashboard
 
-Monitor progress via the status bar
+### 3. Review Results
 
-View your Control Entropy Score on the dashboard
+**Dashboard**
+- KPI cards including CES
+- Exception list with risk scores
+- CES trend chart
 
-3. Review Results
-Dashboard
+**History**
+- Past analyses with CES tracking
+- Export to Excel
 
-KPI cards including CES
+**Reports**
+- Generated PDFs with CES prominently displayed
+- Open within the app
+- Email via SMTP
 
-Exception list with risk scores
+### File Requirements
 
-CES trend chart
+| File Type | Required Columns |
+|-----------|------------------|
+| Vendor Master | vendor_name (or similar) |
+| Payments | payee_name, amount |
 
-History
+**Supported formats:** CSV, Excel (.xlsx, .xls), PDF, Sage CSV
 
-Past analyses with CES tracking
+Reports are saved to: `Desktop/PayReality_Reports/`
 
-Export to Excel
+---
 
-Reports
+## Configuration
 
-Generated PDFs with CES prominently displayed
+After first run, edit `payreality_config.json`:
 
-Open within the app
-
-Email via SMTP
-
-File Requirements
-File Type	Required Columns
-Vendor Master	vendor_name (or similar)
-Payments	payee_name, amount
-Supported formats: CSV, Excel (.xlsx, .xls), PDF, Sage CSV
-
-Reports are saved to: Desktop/PayReality_Reports/
-
-Configuration
-After first run, edit payreality_config.json:
-
-json
+```json
 {
   "thresholds": {
     "exact": 100,
@@ -329,8 +338,13 @@ json
     }
   }
 }
-File Structure
-text
+```
+
+---
+
+## File Structure
+
+```
 Payreality/
 ├── src/
 │   ├── core.py
@@ -345,27 +359,48 @@ Payreality/
 ├── generate_test_data.py
 ├── requirements.txt
 └── README.md
-Troubleshooting
-Problem	Solution
-Missing columns	Rename to payee_name and amount
-File not found	Use file browser
-Empty file	Ensure at least one row
-PDF extraction fails	Ensure PDF contains selectable text (OCR requires Tesseract)
-License
+```
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| Missing columns | Rename to payee_name and amount |
+| File not found | Use file browser |
+| Empty file | Ensure at least one row |
+| PDF extraction fails | Ensure PDF contains selectable text (OCR requires Tesseract) |
+
+---
+
+## License
+
 Proprietary – AI Securewatch
 
 PayReality is a commercial product. Source code is private. For licensing inquiries, contact sean@aisecurewatch.com.
 
-Contact
-AI Securewatch
+---
+
+## Contact
+
+**AI Securewatch**
 
 Email: sean@aisecurewatch.com
 
 GitHub: https://github.com/Ghee9ine/Payreality
 
-The Final Note
-What's your Control Entropy Score?
+---
+
+## The Final Note
+
+**What's your Control Entropy Score?**
 
 If vendor controls have not been independently validated, their effectiveness cannot be assumed.
 
 PayReality is designed to be run as part of every audit cycle. Not because we say so. Because the CES doesn't lie.
+
+---
+
+*Control Entropy. Know your number.*
+```
