@@ -360,7 +360,3 @@ ReportLab - PDF generation
 Matplotlib - Trend visualization
 
 "Controls must be independently verified."
-
-text
-
-This README is ready for your GitHub repository. It's professional, detailed, and will help potential users and customers understand the value of PayReality.
