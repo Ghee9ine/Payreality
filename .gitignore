@@ -29,3 +29,8 @@ Thumbs.db
 config_secrets.py
 *.key
 *.pem
+# Diagnostic / temporary scripts
+diagnose.py
+diagnose_vendor.py
+create_vendor_master.py
+src/diagnose.py

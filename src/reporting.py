@@ -1,6 +1,9 @@
 """
-PayReality Reporting Module - Phase 2
-PDF generation with control mapping, explainability, confidence scoring
+PayReality Reporting Module - Phase 2 (Patched)
+
+Patch applied:
+  [RPT-1]  Currency symbol read from config (default "R") instead of being
+           hardcoded. International clients receive the correct symbol.
 """
 
 import os
@@ -44,17 +47,17 @@ RISK_COLORS = {
 }
 
 STRATEGY_LABELS = {
-    "exact":                    "Exact Match",
-    "normalized":               "Normalised",
-    "token_sort":               "Token Sort",
-    "partial":                  "Partial",
-    "levenshtein":              "Edit Distance",
-    "phonetic":                 "Phonetic",
-    "obfuscation_dot_spacing":  "Obfuscation",
-    "obfuscation_leetspeak":    "Obfuscation",
+    "exact":                       "Exact Match",
+    "normalized":                  "Normalised",
+    "token_sort":                  "Token Sort",
+    "partial":                     "Partial",
+    "levenshtein":                 "Edit Distance",
+    "phonetic":                    "Phonetic",
+    "obfuscation_dot_spacing":     "Obfuscation",
+    "obfuscation_leetspeak":       "Obfuscation",
     "obfuscation_char_repetition": "Obfuscation",
-    "obfuscation_homoglyph":    "Obfuscation",
-    "none":                     "No Match",
+    "obfuscation_homoglyph":       "Obfuscation",
+    "none":                        "No Match",
 }
 
 
@@ -78,6 +81,16 @@ class PayRealityReport:
         self.client_name = client_name
         self.config = config or {}
         self.logger = logging.getLogger("PayReality.Report")
+        # [RPT-1] Currency symbol is configurable; default is South African Rand.
+        self.currency = self.config.get("currency_symbol", "R")
+
+    # ── Money formatter ───────────────────────────────────────────────────────
+
+    def _fmt(self, amount: float) -> str:
+        """Format a monetary amount with the configured currency symbol."""
+        if amount >= 0:
+            return f"{self.currency} {amount:,.0f}"
+        return f"-{self.currency} {abs(amount):,.0f}"
 
     # ── Style helpers ─────────────────────────────────────────────────────────
 
@@ -102,7 +115,8 @@ class PayRealityReport:
         ))
 
     def _rule(self, color=GRAY_LT):
-        return HRFlowable(width="100%", thickness=0.5, color=color, spaceAfter=10, spaceBefore=4)
+        return HRFlowable(width="100%", thickness=0.5, color=color,
+                          spaceAfter=10, spaceBefore=4)
 
     def _sp(self, h=6):
         return Spacer(1, h)
@@ -111,7 +125,6 @@ class PayRealityReport:
 
     def _on_page(self, canvas, doc):
         canvas.saveState()
-        # Header strip
         canvas.setFillColor(NAVY)
         canvas.rect(0, H - 28*mm, W, 28*mm, stroke=0, fill=1)
         canvas.setFillColor(WHITE)
@@ -122,10 +135,8 @@ class PayRealityReport:
         canvas.setFont("Helvetica", 8)
         canvas.drawRightString(W - 20*mm, H - 18*mm, self.client_name)
         canvas.drawRightString(W - 20*mm, H - 24*mm, datetime.now().strftime("%d %B %Y"))
-        # Accent line
         canvas.setFillColor(TEAL)
         canvas.rect(0, H - 29.5*mm, W, 1.5*mm, stroke=0, fill=1)
-        # Footer
         canvas.setStrokeColor(GRAY_LT)
         canvas.setLineWidth(0.4)
         canvas.line(20*mm, 18*mm, W - 20*mm, 18*mm)
@@ -149,30 +160,31 @@ class PayRealityReport:
                     fontSize=8, textColor=GRAY, alignment=TA_CENTER)),
             ]
 
-        data = [[
-            cell(f"{results['total_payments']:,}",    "Total Payments",     PURPLE),
-            cell(f"{results['exception_count']:,}",   "Exceptions",         CORAL),
-            cell(f"R {results['exception_spend']:,.0f}", "Exception Spend",  AMBER),
-            cell(f"{ent:.1f}%",                       "Control Entropy",    ent_color),
+        val_row = [
+            cell(f"{results['total_payments']:,}",      "Total Payments",  PURPLE)[0],
+            cell(f"{results['exception_count']:,}",     "Exceptions",      CORAL)[0],
+            cell(self._fmt(results["exception_spend"]), "Exception Spend", AMBER)[0],   # [RPT-1]
+            cell(f"{ent:.1f}%",                         "Control Entropy", ent_color)[0],
             cell(f"{results['vendor_health']['health_score']}",
-                                                      "Master Health",      TEAL),
-        ]]
-
-        flat = [[item for pair in data[0] for item in pair]]
-        # 2-row table: values row then labels row
-        val_row  = [data[0][i][0] for i in range(5)]
-        lbl_row  = [data[0][i][1] for i in range(5)]
+                                                        "Master Health",   TEAL)[0],
+        ]
+        lbl_row = [
+            cell(f"{results['total_payments']:,}",      "Total Payments",  PURPLE)[1],
+            cell(f"{results['exception_count']:,}",     "Exceptions",      CORAL)[1],
+            cell(self._fmt(results["exception_spend"]), "Exception Spend", AMBER)[1],
+            cell(f"{ent:.1f}%",                         "Control Entropy", ent_color)[1],
+            cell(f"{results['vendor_health']['health_score']}",
+                                                        "Master Health",   TEAL)[1],
+        ]
         cw = (W - 40*mm) / 5
-
         t = Table([val_row, lbl_row], colWidths=[cw]*5)
         t.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), GRAY_LT),
-            ("ROWBACKGROUNDS", (0,0), (-1,-1), [GRAY_LT, GRAY_LT]),
-            ("TOPPADDING",    (0,0), (-1,-1), 10),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 10),
-            ("ALIGN",   (0,0), (-1,-1), "CENTER"),
-            ("VALIGN",  (0,0), (-1,-1), "MIDDLE"),
-            ("LINEAFTER", (0,0), (3,-1), 0.5, GRAY_LT),
+            ("BACKGROUND",    (0, 0), (-1, -1), GRAY_LT),
+            ("TOPPADDING",    (0, 0), (-1, -1), 10),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("LINEAFTER",     (0, 0), (3, -1), 0.5, GRAY_LT),
         ]))
         return t
 
@@ -212,53 +224,51 @@ class PayRealityReport:
         cw_total = W - 40*mm
         t = Table(rows, colWidths=[cw_total*0.38, cw_total*0.32, cw_total*0.15, cw_total*0.15])
         t.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), NAVY),
-            ("TEXTCOLOR",  (0,0), (-1,0), WHITE),
-            ("FONTNAME",   (0,0), (-1,0), "Helvetica-Bold"),
-            ("FONTSIZE",   (0,0), (-1,0), 9),
-            ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, GRAY_LT]),
-            ("GRID",  (0,0), (-1,-1), 0.3, GRAY_LT),
-            ("TOPPADDING",    (0,0), (-1,-1), 6),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
-            ("LEFTPADDING",   (0,0), (-1,-1), 8),
-            ("RIGHTPADDING",  (0,0), (-1,-1), 8),
-            ("ALIGN", (2,0), (-1,-1), "RIGHT"),
+            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+            ("TEXTCOLOR",  (0, 0), (-1, 0), WHITE),
+            ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE",   (0, 0), (-1, 0), 9),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, GRAY_LT]),
+            ("GRID",  (0, 0), (-1, -1), 0.3, GRAY_LT),
+            ("TOPPADDING",    (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+            ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
         ]))
         return t
 
     # ── Exception detail block ────────────────────────────────────────────────
 
     def _exception_block(self, ex: Dict, index: int):
-        risk = ex.get("risk_level", "Low")
-        risk_c = RISK_COLORS.get(risk, GRAY)
-        conf = ex.get("confidence_score", 0)
-        amount = ex.get("amount", 0)
-        controls = ex.get("control_ids", [])
+        risk    = ex.get("risk_level", "Low")
+        risk_c  = RISK_COLORS.get(risk, GRAY)
+        conf    = ex.get("confidence_score", 0)
+        amount  = ex.get("amount", 0)
+        controls    = ex.get("control_ids", [])
         explanation = ex.get("explanation", "")
-        reasons = ex.get("risk_reasons", [])
-        strategy = STRATEGY_LABELS.get(ex.get("match_strategy", "none"), ex.get("match_strategy", "—"))
+        strategy    = STRATEGY_LABELS.get(ex.get("match_strategy", "none"),
+                                          ex.get("match_strategy", "—"))
 
-        # Header row: index + name + amount
         cw = W - 40*mm
         header = Table([[
             Paragraph(f"#{index}", ParagraphStyle("idx",
                 fontName="Helvetica-Bold", fontSize=10, textColor=WHITE)),
             Paragraph(ex.get("payee_name", "Unknown")[:60],
                 ParagraphStyle("en", fontName="Helvetica-Bold", fontSize=10, textColor=WHITE)),
-            Paragraph(f"R {amount:,.0f}",
+            Paragraph(self._fmt(amount),                                        # [RPT-1]
                 ParagraphStyle("amt", fontName="Helvetica-Bold", fontSize=10,
                     textColor=WHITE, alignment=TA_RIGHT)),
         ]], colWidths=[cw*0.07, cw*0.65, cw*0.28])
         header.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), NAVY),
-            ("TOPPADDING",    (0,0), (-1,-1), 8),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 8),
-            ("LEFTPADDING",   (0,0), (-1,-1), 10),
-            ("RIGHTPADDING",  (0,0), (-1,-1), 10),
-            ("ALIGN", (2,0), (-1,-1), "RIGHT"),
+            ("BACKGROUND",    (0, 0), (-1, -1), NAVY),
+            ("TOPPADDING",    (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
+            ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
         ]))
 
-        # Meta row: risk / confidence / strategy / controls
         conf_c = CORAL if conf >= 70 else AMBER if conf >= 40 else TEAL
         meta = Table([[
             Paragraph(f"Risk: <b>{risk}</b>", ParagraphStyle("r",
@@ -271,15 +281,14 @@ class PayRealityReport:
                 fontName="Helvetica", fontSize=9, textColor=CORAL)),
         ]], colWidths=[cw*0.2, cw*0.22, cw*0.28, cw*0.3])
         meta.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), PURPLE_LT),
-            ("TOPPADDING",    (0,0), (-1,-1), 6),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
-            ("LEFTPADDING",   (0,0), (-1,-1), 10),
-            ("RIGHTPADDING",  (0,0), (-1,-1), 6),
-            ("LINEAFTER", (0,0), (2,0), 0.5, GRAY_LT),
+            ("BACKGROUND",    (0, 0), (-1, -1), PURPLE_LT),
+            ("TOPPADDING",    (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
+            ("LINEAFTER", (0, 0), (2, 0), 0.5, GRAY_LT),
         ]))
 
-        # Explanation
         expl = Table([[
             Paragraph("Why flagged:", ParagraphStyle("wl",
                 fontName="Helvetica-Bold", fontSize=8, textColor=GRAY)),
@@ -287,13 +296,13 @@ class PayRealityReport:
                 fontName="Helvetica", fontSize=9, textColor=INK, leading=13)),
         ]], colWidths=[cw*0.13, cw*0.87])
         expl.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), WHITE),
-            ("TOPPADDING",    (0,0), (-1,-1), 8),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 8),
-            ("LEFTPADDING",   (0,0), (-1,-1), 10),
-            ("RIGHTPADDING",  (0,0), (-1,-1), 10),
-            ("VALIGN", (0,0), (-1,-1), "TOP"),
-            ("LINEBELOW", (0,0), (-1,-1), 0.3, GRAY_LT),
+            ("BACKGROUND",    (0, 0), (-1, -1), WHITE),
+            ("TOPPADDING",    (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
+            ("VALIGN",  (0, 0), (-1, -1), "TOP"),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.3, GRAY_LT),
         ]))
 
         return KeepTogether([header, meta, expl, self._sp(4)])
@@ -302,7 +311,7 @@ class PayRealityReport:
 
     def generate_report(self, results: Dict, output_dir: str) -> str:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        ts    = datetime.now().strftime("%Y%m%d_%H%M%S")
         clean = self.client_name.replace(" ", "_")
         filepath = os.path.join(output_dir, f"PayReality_{clean}_{ts}.pdf")
 
@@ -329,29 +338,27 @@ class PayRealityReport:
             self._sp(12),
         ]
 
-        # KPI bar
         story.append(self._kpi_table(results))
         story.append(self._sp(20))
 
-        # Run metadata
         meta_data = [
-            ["Run ID",          results.get("run_id", "—")],
-            ["Analysis Date",   datetime.now().strftime("%Y-%m-%d %H:%M")],
-            ["Client",          results.get("client_name", "—")],
-            ["Threshold",       f"{results.get('threshold', 80)}%"],
-            ["Vendor Master",   f"{results.get('master_file_hash', '—')} (hash)"],
-            ["Payments File",   f"{results.get('payments_file_hash', '—')} (hash)"],
+            ["Run ID",        results.get("run_id", "—")],
+            ["Analysis Date", datetime.now().strftime("%Y-%m-%d %H:%M")],
+            ["Client",        results.get("client_name", "—")],
+            ["Threshold",     f"{results.get('threshold', 80)}%"],
+            ["Vendor Master", f"{results.get('master_file_hash', '—')} (sha256)"],
+            ["Payments File", f"{results.get('payments_file_hash', '—')} (sha256)"],
         ]
         mt = Table(meta_data, colWidths=[cw*0.28, cw*0.72])
         mt.setStyle(TableStyle([
-            ("FONTNAME",  (0,0), (0,-1), "Helvetica-Bold"),
-            ("FONTSIZE",  (0,0), (-1,-1), 9),
-            ("TEXTCOLOR", (0,0), (0,-1), PURPLE),
-            ("ROWBACKGROUNDS", (0,0), (-1,-1), [GRAY_LT, WHITE]),
-            ("TOPPADDING",    (0,0), (-1,-1), 5),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
-            ("LEFTPADDING",   (0,0), (-1,-1), 8),
-            ("GRID", (0,0), (-1,-1), 0.3, GRAY_LT),
+            ("FONTNAME",  (0, 0), (0, -1), "Helvetica-Bold"),
+            ("FONTSIZE",  (0, 0), (-1, -1), 9),
+            ("TEXTCOLOR", (0, 0), (0, -1), PURPLE),
+            ("ROWBACKGROUNDS", (0, 0), (-1, -1), [GRAY_LT, WHITE]),
+            ("TOPPADDING",    (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.3, GRAY_LT),
         ]))
         story.append(mt)
         story.append(PageBreak())
@@ -369,25 +376,27 @@ class PayRealityReport:
             "ACCEPTABLE — Control failure rate is within normal bounds."
         )
         story += [
-            self._para(f"The Control Entropy Score measures the percentage of total spend "
-                       f"that bypassed approved vendor controls after all seven matching passes."),
+            self._para(
+                "The Control Entropy Score measures the percentage of total spend "
+                "that bypassed approved vendor controls after all seven matching passes."
+            ),
             self._sp(8),
         ]
 
-        # Big number
-        ent_c = CORAL if ent >= 20 else AMBER if ent >= 10 else TEAL
+        ent_c   = CORAL if ent >= 20 else AMBER if ent >= 10 else TEAL
         ent_tbl = Table([[
             Paragraph(f"{ent:.2f}%", ParagraphStyle("ent",
-                fontName="Helvetica-Bold", fontSize=36, textColor=ent_c, alignment=TA_CENTER)),
+                fontName="Helvetica-Bold", fontSize=36,
+                textColor=ent_c, alignment=TA_CENTER)),
             Paragraph(ent_interp, ParagraphStyle("ei",
                 fontName="Helvetica", fontSize=10, textColor=INK, leading=15)),
         ]], colWidths=[cw*0.25, cw*0.75])
         ent_tbl.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), GRAY_LT),
-            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING",    (0,0), (-1,-1), 16),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 16),
-            ("LEFTPADDING",   (0,0), (-1,-1), 14),
+            ("BACKGROUND",    (0, 0), (-1, -1), GRAY_LT),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 16),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 16),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 14),
         ]))
         story.append(ent_tbl)
         story.append(self._sp(14))
@@ -407,7 +416,7 @@ class PayRealityReport:
         story.append(self._section("3. Vendor Master Health"))
         story.append(self._rule())
         health = results.get("vendor_health", {})
-        hs = health.get("health_score", 0)
+        hs   = health.get("health_score", 0)
         hs_c = TEAL if hs >= 80 else AMBER if hs >= 60 else CORAL
         hd = [
             ["Total Vendors",     f"{health.get('total_vendors', 0):,}"],
@@ -418,16 +427,16 @@ class PayRealityReport:
         ]
         ht = Table(hd, colWidths=[cw*0.35, cw*0.65])
         ht.setStyle(TableStyle([
-            ("FONTNAME",  (0,0), (0,-1), "Helvetica-Bold"),
-            ("TEXTCOLOR", (0,0), (0,-1), PURPLE),
-            ("TEXTCOLOR", (1,4), (1,4), hs_c),
-            ("FONTNAME",  (1,4), (1,4), "Helvetica-Bold"),
-            ("FONTSIZE",  (0,0), (-1,-1), 9),
-            ("ROWBACKGROUNDS", (0,0), (-1,-1), [GRAY_LT, WHITE]),
-            ("TOPPADDING",    (0,0), (-1,-1), 5),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
-            ("LEFTPADDING",   (0,0), (-1,-1), 8),
-            ("GRID", (0,0), (-1,-1), 0.3, GRAY_LT),
+            ("FONTNAME",  (0, 0), (0, -1), "Helvetica-Bold"),
+            ("TEXTCOLOR", (0, 0), (0, -1), PURPLE),
+            ("TEXTCOLOR", (1, 4), (1, 4),  hs_c),
+            ("FONTNAME",  (1, 4), (1, 4),  "Helvetica-Bold"),
+            ("FONTSIZE",  (0, 0), (-1, -1), 9),
+            ("ROWBACKGROUNDS", (0, 0), (-1, -1), [GRAY_LT, WHITE]),
+            ("TOPPADDING",    (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.3, GRAY_LT),
         ]))
         story.append(ht)
         story.append(PageBreak())
@@ -490,16 +499,16 @@ class PayRealityReport:
 
         ct = Table(ctrl_rows, colWidths=[cw*0.1, cw*0.32, cw*0.28, cw*0.16, cw*0.14])
         ct.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), NAVY),
-            ("TEXTCOLOR",  (0,0), (-1,0), WHITE),
-            ("FONTNAME",   (0,0), (-1,0), "Helvetica-Bold"),
-            ("FONTSIZE",   (0,0), (-1,0), 9),
-            ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, GRAY_LT]),
-            ("GRID",  (0,0), (-1,-1), 0.3, GRAY_LT),
-            ("TOPPADDING",    (0,0), (-1,-1), 6),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
-            ("LEFTPADDING",   (0,0), (-1,-1), 8),
-            ("ALIGN", (4,0), (-1,-1), "RIGHT"),
+            ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+            ("TEXTCOLOR",  (0, 0), (-1, 0), WHITE),
+            ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE",   (0, 0), (-1, 0), 9),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, GRAY_LT]),
+            ("GRID",  (0, 0), (-1, -1), 0.3, GRAY_LT),
+            ("TOPPADDING",    (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
+            ("ALIGN", (4, 0), (-1, -1), "RIGHT"),
         ]))
         story.append(ct)
         story.append(self._sp(20))
@@ -510,17 +519,30 @@ class PayRealityReport:
 
         recs = []
         if ent >= 20:
-            recs.append(("Critical", "Immediate escalation required — Control Entropy >20% indicates systemic vendor control failure. Freeze new vendor onboarding and review all high-confidence exceptions with management."))
+            recs.append(("Critical",
+                "Immediate escalation required — Control Entropy >20% indicates systemic vendor "
+                "control failure. Freeze new vendor onboarding and review all high-confidence "
+                "exceptions with management."))
         if ent >= 10:
-            recs.append(("High", "Investigate all High-risk exceptions flagged in Section 4. Prioritise items with Confidence Score ≥70 and OBC (Obfuscation) control violations."))
+            recs.append(("High",
+                "Investigate all High-risk exceptions flagged in Section 4. Prioritise items with "
+                "Confidence Score ≥70 and OBC (Obfuscation) control violations."))
         if ctrl_counter.get("VDC", 0) > 0:
-            recs.append(("Medium", f"{ctrl_counter['VDC']} duplicate vendor payment(s) detected. Reconcile against payment authorisation records and implement pre-payment duplicate checks."))
+            recs.append(("Medium",
+                f"{ctrl_counter['VDC']} duplicate vendor payment(s) detected. Reconcile against "
+                "payment authorisation records and implement pre-payment duplicate checks."))
         if ctrl_counter.get("VTC", 0) > 0:
-            recs.append(("Medium", f"{ctrl_counter['VTC']} new vendor(s) received high-value payments. Verify onboarding documentation and approval sign-off for each."))
+            recs.append(("Medium",
+                f"{ctrl_counter['VTC']} new vendor(s) received high-value payments. Verify "
+                "onboarding documentation and approval sign-off for each."))
         if health.get("health_score", 100) < 80:
-            recs.append(("Low", f"Vendor Master Health Score is {health.get('health_score', 0)}/100. Perform a master data cleanse — remove duplicates, fill blank names, and deactivate dormant records."))
+            recs.append(("Low",
+                f"Vendor Master Health Score is {health.get('health_score', 0)}/100. Perform a "
+                "master data cleanse — remove duplicates, fill blank names, and deactivate "
+                "dormant records."))
         if not recs:
-            recs.append(("Low", "No critical findings. Continue quarterly validation to maintain continuous assurance."))
+            recs.append(("Low",
+                "No critical findings. Continue quarterly validation to maintain continuous assurance."))
 
         sev_c_map = {"Critical": CORAL, "High": AMBER, "Medium": PURPLE, "Low": TEAL}
         for sev, text in recs:
@@ -532,12 +554,12 @@ class PayRealityReport:
                     fontSize=9, textColor=INK, leading=13)),
             ]], colWidths=[cw*0.12, cw*0.88])
             row.setStyle(TableStyle([
-                ("BACKGROUND", (0,0), (-1,-1), GRAY_LT),
-                ("TOPPADDING",    (0,0), (-1,-1), 8),
-                ("BOTTOMPADDING", (0,0), (-1,-1), 8),
-                ("LEFTPADDING",   (0,0), (-1,-1), 10),
-                ("LINEBELOW", (0,0), (-1,-1), 0.3, WHITE),
-                ("VALIGN", (0,0), (-1,-1), "TOP"),
+                ("BACKGROUND",    (0, 0), (-1, -1), GRAY_LT),
+                ("TOPPADDING",    (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+                ("LINEBELOW",     (0, 0), (-1, -1), 0.3, WHITE),
+                ("VALIGN",        (0, 0), (-1, -1), "TOP"),
             ]))
             story.append(row)
             story.append(self._sp(4))
@@ -546,7 +568,8 @@ class PayRealityReport:
         story.append(self._sp(24))
         story.append(self._rule(PURPLE))
         story.append(self._para(
-            '"If vendor controls have not been independently verified, their effectiveness cannot be assumed."',
+            '"If vendor controls have not been independently verified, '
+            'their effectiveness cannot be assumed."',
             size=10, color=PURPLE, bold=False, align=TA_CENTER
         ))
         story.append(self._sp(4))
