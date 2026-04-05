@@ -1,5 +1,5 @@
 """
-PayReality Desktop Application — Phase 2 (Performance Optimized)
+PayReality Desktop Application — Phase 2 (Performance Optimized + Text Scaling)
 
 Optimizations applied:
   [PERF-1]  Throttled search/filter with 300ms debounce
@@ -9,9 +9,15 @@ Optimizations applied:
   [PERF-5]  Reduced matplotlib DPI from 100 to 72
   [PERF-6]  Disabled unnecessary hover effects
   [PERF-7]  Cached history queries
-  [PERF-8]  Chunked exception rendering (keeps UI responsive)
+  [PERF-8]  Chunked exception rendering
   [PERF-9]  Pre-computed risk background colors
-  [PERF-10] Used native tkinter variables where possible
+  [PERF-10] Native tkinter variables where possible
+
+Text Scaling:
+  [TEXT-1]  Windows DPI awareness enabled
+  [TEXT-2]  Scaled fonts (logo 24, titles 18, KPI 28)
+  [TEXT-3]  Bold headers throughout
+  [TEXT-4]  Improved readability on all screen sizes
 
 All other patches preserved:
   [APP-1]  PayReality_Data directory created BEFORE logging
@@ -36,6 +42,14 @@ from email import encoders
 from typing import Dict, Optional, List
 import logging
 import tkinter as tk
+
+# ── Windows DPI Awareness ──────────────────────────────────────────────────────
+if sys.platform == "win32":
+    try:
+        from ctypes import windll
+        windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        pass
 
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
@@ -96,9 +110,21 @@ STRATEGY_COLORS = {
 
 
 def F(size=13, weight="normal"):
+    """Get font with proper Windows scaling. [TEXT-2]"""
+    if sys.platform == "win32":
+        scale = 1.05
+    elif sys.platform == "darwin":
+        scale = 1.0
+    else:
+        scale = 1.0
+    
+    actual_size = int(size * scale)
+    weight_val = "bold" if weight in ("bold", "Bold", "BOLD") else "normal"
+    
     return ctk.CTkFont(
-        family="Inter" if sys.platform == "darwin" else "Segoe UI",
-        size=size, weight=weight,
+        family="Segoe UI" if sys.platform == "win32" else "Inter" if sys.platform == "darwin" else "SansSerif",
+        size=actual_size,
+        weight=weight_val,
     )
 
 
@@ -122,7 +148,7 @@ class PayRealityApp:
         self.output_dir: str = str(Path.home() / "Desktop" / "PayReality_Reports")
 
         # UI State
-        self.email_var = tk.BooleanVar(value=False)  # [PERF-10] native tkinter
+        self.email_var = tk.BooleanVar(value=False)
         self._filter_risk = tk.StringVar(value="All")
         self._filter_ctrl = tk.StringVar(value="All")
         self._sort_by = tk.StringVar(value="Confidence ↓")
@@ -140,7 +166,8 @@ class PayRealityApp:
         self._cached_history = None
         self._history_cache_valid = False
         self._search_timer = None
-        self._search_delay_ms = 300  # [PERF-1]
+        self._search_delay_ms = 300
+        self._search_trace_id = None
 
         # Fallback output dir
         try:
@@ -171,9 +198,10 @@ class PayRealityApp:
     def _build_sidebar(self):
         logo = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         logo.pack(fill="x", padx=20, pady=(28, 24))
-        ctk.CTkLabel(logo, text="PayReality", font=F(20, "bold"),
+        
+        ctk.CTkLabel(logo, text="PayReality", font=F(24, "bold"),
                      text_color="#FFFFFF").pack(anchor="w")
-        ctk.CTkLabel(logo, text="Phase 2 — ICV Platform", font=F(10),
+        ctk.CTkLabel(logo, text="Independent Control Verification", font=F(10),
                      text_color="#AFA9EC").pack(anchor="w", pady=(2, 0))
 
         ctk.CTkFrame(self.sidebar, height=1, fg_color="#3C3489").pack(fill="x",
@@ -195,8 +223,8 @@ class PayRealityApp:
                 nav_frame, text=f"  {icon}  {name}",
                 font=F(13), anchor="w",
                 fg_color="transparent", text_color="#CECBF6",
-                hover_color="#3C3489" if name == "Dashboard" else None,  # [PERF-6]
-                hover=False if name != "Dashboard" else True,  # Disable hover for most
+                hover_color="#3C3489" if name == "Dashboard" else None,
+                hover=False if name != "Dashboard" else True,
                 height=44, corner_radius=8,
                 command=lambda n=name: self._switch_tab(n),
             )
@@ -207,7 +235,7 @@ class PayRealityApp:
         ctk.CTkLabel(
             self.sidebar,
             text='"Controls must be\nindependently verified."',
-            font=F(9), text_color="#534AB7",
+            font=F(10), text_color="#534AB7",
             justify="center",
         ).pack(pady=(0, 20), padx=16)
 
@@ -218,7 +246,7 @@ class PayRealityApp:
         bar.pack_propagate(False)
 
         self._page_title = ctk.CTkLabel(bar, text="Dashboard",
-                                         font=F(16, "bold"), text_color=C["ink"])
+                                         font=F(18, "bold"), text_color=C["ink"])
         self._page_title.pack(side="left", padx=28)
 
         self._run_id_label = ctk.CTkLabel(bar, text="", font=F(10),
@@ -228,6 +256,22 @@ class PayRealityApp:
         ctk.CTkFrame(self.main, height=1, fg_color=C["border"]).pack(fill="x")
 
     def _switch_tab(self, name: str):
+        # Clean up search trace before leaving Exceptions tab
+        if hasattr(self, '_search_trace_id') and self._search_trace_id:
+            try:
+                self._search_var.trace_remove("write", self._search_trace_id)
+            except Exception:
+                pass
+            self._search_trace_id = None
+        
+        # Cancel any pending search timer
+        if hasattr(self, '_search_timer') and self._search_timer:
+            try:
+                self.root.after_cancel(self._search_timer)
+            except Exception:
+                pass
+            self._search_timer = None
+        
         for n, btn in self._nav_btns.items():
             btn.configure(
                 fg_color=C["purple"] if n == name else "transparent",
@@ -252,6 +296,11 @@ class PayRealityApp:
     # ══════════════════════════════════════════════════════════════════════════
 
     def _show_dashboard(self):
+        # Clear any existing content
+        for w in self.content.winfo_children():
+            w.destroy()
+        
+        # KPI row
         kpi_row = ctk.CTkFrame(self.content, fg_color="transparent")
         kpi_row.pack(fill="x", pady=(0, 20))
         self._kpi_cards = {}
@@ -266,63 +315,75 @@ class PayRealityApp:
         for key, label, default, color in kpis:
             card = ctk.CTkFrame(kpi_row, fg_color=C["card"], corner_radius=12)
             card.pack(side="left", fill="both", expand=True, padx=5)
-            ctk.CTkLabel(card, text=label, font=F(10), text_color=C["muted"]).pack(
+            ctk.CTkLabel(card, text=label, font=F(11), text_color=C["muted"]).pack(
                 anchor="w", padx=16, pady=(14, 2))
-            val = ctk.CTkLabel(card, text=default, font=F(26, "bold"), text_color=color)
+            val = ctk.CTkLabel(card, text=default, font=F(28, "bold"), text_color=color)
             val.pack(anchor="w", padx=16, pady=(0, 14))
             self._kpi_cards[key] = val
 
-        bottom = ctk.CTkFrame(self.content, fg_color="transparent")
-        bottom.pack(fill="both", expand=True)
+        # Main content area - split into left (chart) and right (upload panel)
+        main_row = ctk.CTkFrame(self.content, fg_color="transparent")
+        main_row.pack(fill="both", expand=True)
 
-        # Trend chart
-        chart_card = ctk.CTkFrame(bottom, fg_color=C["card"], corner_radius=12)
-        chart_card.pack(side="left", fill="both", expand=True, padx=(0, 12))
+        # LEFT SIDE - Chart (smaller, fixed width 420)
+        left_panel = ctk.CTkFrame(main_row, fg_color="transparent", width=420)
+        left_panel.pack(side="left", fill="both", expand=False, padx=(0, 12))
+        left_panel.pack_propagate(False)
+
+        chart_card = ctk.CTkFrame(left_panel, fg_color=C["card"], corner_radius=12)
+        chart_card.pack(fill="both", expand=True)
+
         ctk.CTkLabel(chart_card, text="Control Entropy Trend",
-                     font=F(13, "bold"), text_color=C["ink"]).pack(
+                     font=F(14, "bold"), text_color=C["ink"]).pack(
                      anchor="w", padx=18, pady=(16, 6))
-        self._figure = plt.Figure(figsize=(6, 3.2), dpi=72, facecolor=C["card"])  # [PERF-5]
+
+        self._figure = plt.Figure(figsize=(5.2, 2.8), dpi=72, facecolor=C["card"])
         self._ax = self._figure.add_subplot(111)
         self._style_axes(self._ax)
         self._canvas = FigureCanvasTkAgg(self._figure, master=chart_card)
         self._canvas.get_tk_widget().pack(fill="both", expand=True, padx=12, pady=(0, 16))
         self._refresh_chart()
 
-        # Upload / run panel
-        run_card = ctk.CTkFrame(bottom, fg_color=C["card"], corner_radius=12, width=340)
-        run_card.pack(side="right", fill="y", padx=(12, 0))
-        run_card.pack_propagate(False)
+        # RIGHT SIDE - Upload panel (takes remaining space)
+        right_panel = ctk.CTkFrame(main_row, fg_color="transparent")
+        right_panel.pack(side="right", fill="both", expand=True, padx=(12, 0))
 
-        ctk.CTkLabel(run_card, text="New Analysis", font=F(14, "bold"),
+        run_card = ctk.CTkFrame(right_panel, fg_color=C["card"], corner_radius=12)
+        run_card.pack(fill="both", expand=True)
+
+        ctk.CTkLabel(run_card, text="New Analysis", font=F(15, "bold"),
                      text_color=C["ink"]).pack(anchor="w", padx=20, pady=(18, 4))
         ctk.CTkLabel(run_card, text="Load files and run the 7-pass engine",
-                     font=F(10), text_color=C["muted"]).pack(anchor="w", padx=20, pady=(0, 14))
+                     font=F(11), text_color=C["muted"]).pack(anchor="w", padx=20, pady=(0, 14))
 
+        # Master file picker
         self._master_label = ctk.CTkLabel(run_card, text="Vendor Master — not selected",
-                                           font=F(10), text_color=C["muted"])
+                                           font=F(11), text_color=C["muted"])
         self._master_label.pack(anchor="w", padx=20, pady=(0, 4))
         ctk.CTkButton(run_card, text="Browse Vendor Master",
                       command=lambda: self._pick_file("master"),
-                      height=34, font=F(11), fg_color=C["purple"],
-                      hover_color=C["navy"], corner_radius=8,
-                      hover=False).pack(fill="x", padx=20, pady=(0, 12))  # [PERF-6]
-
-        self._payments_label = ctk.CTkLabel(run_card, text="Payments — not selected",
-                                             font=F(10), text_color=C["muted"])
-        self._payments_label.pack(anchor="w", padx=20, pady=(0, 4))
-        ctk.CTkButton(run_card, text="Browse Payments File",
-                      command=lambda: self._pick_file("payments"),
-                      height=34, font=F(11), fg_color=C["purple"],
+                      height=34, font=F(12), fg_color=C["purple"],
                       hover_color=C["navy"], corner_radius=8,
                       hover=False).pack(fill="x", padx=20, pady=(0, 12))
 
-        ctk.CTkLabel(run_card, text="Match Threshold", font=F(10, "bold"),
+        # Payments file picker
+        self._payments_label = ctk.CTkLabel(run_card, text="Payments — not selected",
+                                             font=F(11), text_color=C["muted"])
+        self._payments_label.pack(anchor="w", padx=20, pady=(0, 4))
+        ctk.CTkButton(run_card, text="Browse Payments File",
+                      command=lambda: self._pick_file("payments"),
+                      height=34, font=F(12), fg_color=C["purple"],
+                      hover_color=C["navy"], corner_radius=8,
+                      hover=False).pack(fill="x", padx=20, pady=(0, 12))
+
+        # Threshold slider
+        ctk.CTkLabel(run_card, text="Match Threshold", font=F(11, "bold"),
                      text_color=C["ink"]).pack(anchor="w", padx=20, pady=(4, 2))
         thresh_row = ctk.CTkFrame(run_card, fg_color="transparent")
         thresh_row.pack(fill="x", padx=20, pady=(0, 10))
-        self._thresh_var = tk.IntVar(value=80)  # [PERF-10]
+        self._thresh_var = tk.IntVar(value=80)
         self._thresh_label = ctk.CTkLabel(thresh_row, text="80%",
-                                           font=F(11, "bold"), text_color=C["purple"])
+                                           font=F(12, "bold"), text_color=C["purple"])
         self._thresh_label.pack(side="right")
         ctk.CTkSlider(thresh_row, from_=50, to=95, number_of_steps=45,
                       variable=self._thresh_var,
@@ -331,11 +392,13 @@ class PayRealityApp:
                       progress_color=C["purple"]).pack(side="left", fill="x",
                       expand=True, padx=(0, 10))
 
+        # Email checkbox
         ctk.CTkCheckBox(run_card, text="Send email report",
-                        variable=self.email_var, font=F(11),
+                        variable=self.email_var, font=F(12),
                         checkbox_height=18, checkbox_width=18,
                         fg_color=C["purple"]).pack(anchor="w", padx=20, pady=(0, 8))
 
+        # Run button
         self._run_btn = ctk.CTkButton(
             run_card, text="▶  Run Analysis",
             command=self._run_analysis,
@@ -343,17 +406,19 @@ class PayRealityApp:
             fg_color=C["navy"], hover_color=C["purple"],
             corner_radius=10,
             state="disabled" if not (self.master_file and self.payments_file) else "normal",
-            hover=False,  # [PERF-6]
+            hover=False,
         )
         self._run_btn.pack(fill="x", padx=20, pady=(4, 8))
 
+        # Progress bar
         self._progress = ctk.CTkProgressBar(run_card, height=4,
                                              fg_color=C["gray_lt"],
                                              progress_color=C["purple"])
         self._progress.pack(fill="x", padx=20, pady=(0, 8))
         self._progress.set(0)
 
-        self._log_box = ctk.CTkTextbox(run_card, height=110, font=F(9),
+        # Log box - taller
+        self._log_box = ctk.CTkTextbox(run_card, height=160, font=F(10),
                                         corner_radius=8, fg_color=C["bg"],
                                         border_width=1, border_color=C["border"],
                                         text_color=C["muted"])
@@ -368,7 +433,7 @@ class PayRealityApp:
             ax.spines[spine].set_visible(False)
         ax.spines["left"].set_color(C["border"])
         ax.spines["bottom"].set_color(C["border"])
-        ax.tick_params(colors=C["muted"], labelsize=8)
+        ax.tick_params(colors=C["muted"], labelsize=9)
 
     def _refresh_chart(self):
         """Refresh chart only if data has changed. [PERF-3]"""
@@ -392,11 +457,11 @@ class PayRealityApp:
             self._ax.axhline(y=10, color=C["amber"], linestyle="--", alpha=0.4, linewidth=0.8)
             self._ax.axhline(y=20, color=C["coral"], linestyle="--", alpha=0.4, linewidth=0.8)
             self._ax.set_ylim(0, max(max(scores) * 1.2, 30))
-            self._ax.set_xlabel("Run #", fontsize=8, color=C["muted"])
-            self._ax.set_ylabel("Entropy %", fontsize=8, color=C["muted"])
+            self._ax.set_xlabel("Run #", fontsize=9, color=C["muted"])
+            self._ax.set_ylabel("Entropy %", fontsize=9, color=C["muted"])
         else:
             self._ax.text(0.5, 0.5, "No analyses yet", transform=self._ax.transAxes,
-                          ha="center", va="center", fontsize=11, color=C["muted"])
+                          ha="center", va="center", fontsize=12, color=C["muted"])
             self._ax.set_xlim(0, 1)
             self._ax.set_ylim(0, 1)
 
@@ -441,7 +506,6 @@ class PayRealityApp:
 
     def _build_exceptions_ui(self):
         """Build UI once. [PERF-2]"""
-        # Reset pagination
         self._exc_current_page = 0
 
         # Controls bar
@@ -469,15 +533,22 @@ class PayRealityApp:
 
         search_entry = ctk.CTkEntry(bar, textvariable=self._search_var,
                                     placeholder_text="Search payee…",
-                                    height=30, width=180, font=F(11),
+                                    height=32, width=180, font=F(11),
                                     fg_color=C["bg"], border_color=C["border"],
                                     text_color=C["ink"])
         search_entry.pack(side="left", padx=(4, 0))
-        self._search_var.trace_add("write", self._on_search_changed)  # [PERF-1]
+
+        if hasattr(self, '_search_trace_id') and self._search_trace_id:
+            try:
+                self._search_var.trace_remove("write", self._search_trace_id)
+            except Exception:
+                pass
+
+        self._search_trace_id = self._search_var.trace_add("write", self._on_search_changed)
 
         # Rows per page selector
         ctk.CTkLabel(bar, text="Show:", font=F(11), text_color=C["muted"]).pack(side="left", padx=(12, 4))
-        self._page_size_var = tk.StringVar(value="50")  # [PERF-10]
+        self._page_size_var = tk.StringVar(value="50")
         ctk.CTkComboBox(
             bar, values=["25", "50", "100", "250"],
             variable=self._page_size_var, width=70, height=30, font=F(11),
@@ -485,23 +556,23 @@ class PayRealityApp:
         ).pack(side="left", padx=4)
 
         # Export buttons
-        ctk.CTkButton(bar, text="Export JSON", width=90, height=30, font=F(10),
+        ctk.CTkButton(bar, text="Export JSON", width=90, height=32, font=F(11),
                       fg_color=C["teal"], corner_radius=6,
                       command=self._export_json_bg,
                       hover=False).pack(side="right", padx=(4, 0))
-        ctk.CTkButton(bar, text="Export CSV", width=90, height=30, font=F(10),
+        ctk.CTkButton(bar, text="Export CSV", width=90, height=32, font=F(11),
                       fg_color=C["purple"], corner_radius=6,
                       command=self._export_csv_bg,
                       hover=False).pack(side="right", padx=(4, 0))
 
         # Column headers
-        hdr = ctk.CTkFrame(self.content, fg_color=C["navy"], corner_radius=8, height=34)
+        hdr = ctk.CTkFrame(self.content, fg_color=C["navy"], corner_radius=8, height=38)
         hdr.pack(fill="x", pady=(0, 4))
         hdr.pack_propagate(False)
         for txt, w in [("#", 40), ("Payee Name", 220), ("Amount", 100),
                        ("Controls", 120), ("Confidence", 90), ("Risk", 70),
                        ("Strategy", 100)]:
-            ctk.CTkLabel(hdr, text=txt, font=F(10, "bold"), text_color="#FFFFFF",
+            ctk.CTkLabel(hdr, text=txt, font=F(11, "bold"), text_color="#FFFFFF",
                          width=w, anchor="w").pack(side="left",
                          padx=(12 if txt == "#" else 6, 4))
 
@@ -518,11 +589,21 @@ class PayRealityApp:
         if not hasattr(self, "_exc_scroll"):
             return
 
-        # Clear scroll frame
-        for w in self._exc_scroll.winfo_children():
-            w.destroy()
+        # Get the correct parent widget for CTkScrollableFrame
+        scroll_widget = self._exc_scroll
+        parent_widget = scroll_widget
+        
+        # CTkScrollableFrame stores actual content in _parent_frame
+        if hasattr(scroll_widget, '_parent_frame'):
+            parent_widget = scroll_widget._parent_frame
+            # Clear the parent frame
+            for w in parent_widget.winfo_children():
+                w.destroy()
+        else:
+            # Fallback for regular frames
+            for w in scroll_widget.winfo_children():
+                w.destroy()
 
-        # Get and filter exceptions
         excs = list(self.current_results.get("exceptions", []))
         risk_f = self._filter_risk.get()
         ctrl_f = self._filter_ctrl.get()
@@ -535,7 +616,6 @@ class PayRealityApp:
         if search:
             excs = [e for e in excs if search in e.get("payee_name", "").lower()]
 
-        # Sort
         sort_key = self._sort_by.get()
         if sort_key == "Amount ↓":
             excs.sort(key=lambda x: -x.get("amount", 0))
@@ -546,26 +626,21 @@ class PayRealityApp:
 
         self._exc_filtered_total = len(excs)
 
-        # Pagination
         start = self._exc_current_page * self._exc_page_size
         end = start + self._exc_page_size
         page_excs = excs[start:end]
 
-        # Batch render rows [PERF-4]
-        self._exc_scroll.configure(state="disabled")
+        # Add rows directly to parent_widget
         for i, ex in enumerate(page_excs, start=start + 1):
-            self._exc_row(self._exc_scroll, ex, i)
-        self._exc_scroll.configure(state="normal")
-        self._exc_scroll.update_idletasks()
+            self._exc_row(parent_widget, ex, i)
 
         if not page_excs:
-            ctk.CTkLabel(self._exc_scroll, text="No exceptions match the current filters.",
+            ctk.CTkLabel(parent_widget, text="No exceptions match the current filters.",
                          font=F(12), text_color=C["muted"]).pack(pady=40)
 
         self._render_pagination_controls()
 
     def _render_pagination_controls(self):
-        """Create Previous/Next buttons and page indicator."""
         if not hasattr(self, "_exc_pagination_frame"):
             return
 
@@ -581,7 +656,7 @@ class PayRealityApp:
 
         prev_btn = ctk.CTkButton(
             center, text="← Previous", width=100, height=32,
-            font=F(11), fg_color=C["purple"], corner_radius=6,
+            font=F(12), fg_color=C["purple"], corner_radius=6,
             state="normal" if self._exc_current_page > 0 else "disabled",
             command=self._prev_page,
             hover=False,
@@ -591,13 +666,13 @@ class PayRealityApp:
         page_label = ctk.CTkLabel(
             center,
             text=f"Page {self._exc_current_page + 1} of {total_pages}  ({self._exc_filtered_total} exceptions)",
-            font=F(11, "bold"), text_color=C["ink"]
+            font=F(12, "bold"), text_color=C["ink"]
         )
         page_label.pack(side="left", padx=15)
 
         next_btn = ctk.CTkButton(
             center, text="Next →", width=100, height=32,
-            font=F(11), fg_color=C["purple"], corner_radius=6,
+            font=F(12), fg_color=C["purple"], corner_radius=6,
             state="normal" if self._exc_current_page < total_pages - 1 else "disabled",
             command=self._next_page,
             hover=False,
@@ -605,10 +680,22 @@ class PayRealityApp:
         next_btn.pack(side="left", padx=5)
 
     def _on_search_changed(self, *args):
-        """Debounced search handler. [PERF-1]"""
+        try:
+            if not self.root.winfo_exists():
+                return
+        except Exception:
+            return
+        
         if self._search_timer:
             self.root.after_cancel(self._search_timer)
-        self._search_timer = self.root.after(self._search_delay_ms, self._refresh_exceptions_data)
+        self._search_timer = self.root.after(self._search_delay_ms, self._safe_refresh_exceptions)
+
+    def _safe_refresh_exceptions(self):
+        try:
+            if hasattr(self, '_exc_scroll') and self._exc_scroll.winfo_exists():
+                self._refresh_exceptions_data()
+        except (tk.TclError, RuntimeError):
+            pass
 
     def _change_page_size(self, new_size):
         self._exc_page_size = new_size
@@ -635,14 +722,15 @@ class PayRealityApp:
         strat_c = STRATEGY_COLORS.get(strategy.split("_")[0], C["muted"])
         strat_label = strategy.replace("obfuscation_", "Obfsc/").replace("_", " ").title()
 
-        bg = RISK_BG_COLORS.get(risk, C["card"])  # [PERF-9]
+        bg = RISK_BG_COLORS.get(risk, C["card"])
 
-        row = ctk.CTkFrame(parent, fg_color=bg, corner_radius=6, height=40)
+        row = ctk.CTkFrame(parent, fg_color=bg, corner_radius=6, height=44)
         row.pack(fill="x", pady=2)
         row.pack_propagate(False)
 
         def add(txt, width, color, bold=False, expand=False):
-            ctk.CTkLabel(row, text=str(txt), font=F(10, "bold" if bold else "normal"),
+            font_size = 11 if bold else 10
+            ctk.CTkLabel(row, text=str(txt), font=F(font_size, "bold" if bold else "normal"),
                          text_color=color, width=width,
                          anchor="w").pack(side="left", padx=6, fill="x" if expand else "none",
                          expand=expand)
@@ -654,6 +742,7 @@ class PayRealityApp:
         add(f"{conf}/100", 90, conf_c, bold=True)
         add(risk, 70, risk_c, bold=True)
         add(strat_label, 100, strat_c)
+        
         expl = ex.get("explanation", "")
         ctk.CTkLabel(row, text=(expl[:120] + "…" if len(expl) > 120 else expl),
                      font=F(9), text_color=C["muted"], anchor="w").pack(
@@ -666,7 +755,7 @@ class PayRealityApp:
     def _show_exception_detail(self, ex: Dict):
         win = ctk.CTkToplevel(self.root)
         win.title(f"Exception Detail — {ex.get('payee_name', '')}")
-        win.geometry("700x560")
+        win.geometry("720x580")
         win.configure(fg_color=C["bg"])
         win.grab_set()
 
@@ -679,22 +768,22 @@ class PayRealityApp:
         h = ctk.CTkFrame(scroll, fg_color=C["navy"], corner_radius=10)
         h.pack(fill="x", pady=(0, 14))
         ctk.CTkLabel(h, text=ex.get("payee_name", ""),
-                     font=F(16, "bold"), text_color="#FFFFFF").pack(
+                     font=F(18, "bold"), text_color="#FFFFFF").pack(
                      anchor="w", padx=18, pady=(14, 4))
         ctk.CTkLabel(h, text=f"R {ex.get('amount', 0):,.2f}  ·  {ex.get('payment_date', '—')[:10]}",
-                     font=F(11), text_color="#AFA9EC").pack(anchor="w", padx=18, pady=(0, 14))
+                     font=F(12), text_color="#AFA9EC").pack(anchor="w", padx=18, pady=(0, 14))
 
         def section(title, color=C["purple"]):
-            ctk.CTkLabel(scroll, text=title, font=F(12, "bold"),
+            ctk.CTkLabel(scroll, text=title, font=F(13, "bold"),
                          text_color=color).pack(anchor="w", pady=(14, 4))
             ctk.CTkFrame(scroll, height=1, fg_color=C["border"]).pack(fill="x", pady=(0, 8))
 
         def field(label, value, val_color=C["ink"]):
             row = ctk.CTkFrame(scroll, fg_color=C["card"], corner_radius=6)
             row.pack(fill="x", pady=2)
-            ctk.CTkLabel(row, text=label, font=F(10), text_color=C["muted"],
+            ctk.CTkLabel(row, text=label, font=F(11), text_color=C["muted"],
                          width=160, anchor="w").pack(side="left", padx=12, pady=7)
-            ctk.CTkLabel(row, text=str(value), font=F(10, "bold"),
+            ctk.CTkLabel(row, text=str(value), font=F(11, "bold"),
                          text_color=val_color, anchor="w").pack(
                          side="left", padx=8, pady=7, fill="x", expand=True)
 
@@ -714,7 +803,7 @@ class PayRealityApp:
         field("Passes Tried", " → ".join(ex.get("passes_tried", [])))
 
         section("Explanation")
-        expl_box = ctk.CTkTextbox(scroll, height=100, font=F(10),
+        expl_box = ctk.CTkTextbox(scroll, height=100, font=F(11),
                                    fg_color=C["card"], border_width=1,
                                    border_color=C["border"], text_color=C["ink"],
                                    corner_radius=8)
@@ -732,11 +821,11 @@ class PayRealityApp:
         if ex.get("risk_reasons"):
             section("Risk Factors")
             for r in ex["risk_reasons"]:
-                ctk.CTkLabel(scroll, text=f"  • {r}", font=F(10),
+                ctk.CTkLabel(scroll, text=f"  • {r}", font=F(11),
                              text_color=C["ink"]).pack(anchor="w", pady=1)
 
         ctk.CTkButton(win, text="Close", command=win.destroy,
-                      fg_color=C["purple"], height=36, corner_radius=8, font=F(12),
+                      fg_color=C["purple"], height=38, corner_radius=8, font=F(12),
                       hover=False).pack(pady=14, padx=24)
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -746,10 +835,10 @@ class PayRealityApp:
     def _show_history(self):
         top = ctk.CTkFrame(self.content, fg_color="transparent")
         top.pack(fill="x", pady=(0, 12))
-        ctk.CTkLabel(top, text="Analysis History", font=F(15, "bold"),
+        ctk.CTkLabel(top, text="Analysis History", font=F(16, "bold"),
                      text_color=C["ink"]).pack(side="left")
         ctk.CTkButton(top, text="Export Excel", width=110, height=32,
-                      font=F(11), fg_color=C["teal"], corner_radius=8,
+                      font=F(12), fg_color=C["teal"], corner_radius=8,
                       command=self._export_history_excel,
                       hover=False).pack(side="right")
 
@@ -760,11 +849,11 @@ class PayRealityApp:
         style.theme_use("clam")
         style.configure("PR.Treeview",
                          background=C["card"], foreground=C["ink"],
-                         rowheight=34, fieldbackground=C["card"],
-                         borderwidth=0, font=("Segoe UI", 10))
+                         rowheight=36, fieldbackground=C["card"],
+                         borderwidth=0, font=("Segoe UI", 11))
         style.configure("PR.Treeview.Heading",
                          background=C["navy"], foreground="#FFFFFF",
-                         font=("Segoe UI", 10, "bold"), relief="flat")
+                         font=("Segoe UI", 11, "bold"), relief="flat")
         style.map("PR.Treeview",
                   background=[("selected", C["purple_lt"])],
                   foreground=[("selected", C["ink"])])
@@ -790,7 +879,7 @@ class PayRealityApp:
         for item in self._hist_tree.get_children():
             self._hist_tree.delete(item)
 
-        rows = self._get_cached_history()  # [PERF-7]
+        rows = self._get_cached_history()
         for row in rows:
             self._hist_tree.insert("", "end", values=(
                 row["timestamp"][:16],
@@ -804,7 +893,6 @@ class PayRealityApp:
             ))
 
     def _get_cached_history(self):
-        """Return cached history, refreshing only when invalid. [PERF-7]"""
         if not self._history_cache_valid:
             self._cached_history = self.engine.get_history()
             self._history_cache_valid = True
@@ -817,10 +905,10 @@ class PayRealityApp:
     def _show_reports(self):
         top = ctk.CTkFrame(self.content, fg_color="transparent")
         top.pack(fill="x", pady=(0, 12))
-        ctk.CTkLabel(top, text="Saved Reports", font=F(15, "bold"),
+        ctk.CTkLabel(top, text="Saved Reports", font=F(16, "bold"),
                      text_color=C["ink"]).pack(side="left")
         ctk.CTkButton(top, text="Open Folder", width=110, height=32,
-                      font=F(11), fg_color=C["purple"], corner_radius=8,
+                      font=F(12), fg_color=C["purple"], corner_radius=8,
                       command=lambda: webbrowser.open(self.output_dir),
                       hover=False).pack(side="right")
 
@@ -839,13 +927,13 @@ class PayRealityApp:
             card = ctk.CTkFrame(scroll, fg_color=C["card"], corner_radius=10, height=60)
             card.pack(fill="x", pady=4)
             card.pack_propagate(False)
-            ctk.CTkLabel(card, text=r["timestamp"][:16], font=F(10),
+            ctk.CTkLabel(card, text=r["timestamp"][:16], font=F(11),
                          text_color=C["muted"], width=140).pack(side="left", padx=(14, 8), pady=12)
             ctk.CTkLabel(card, text=r["client_name"] or "—",
-                         font=F(11, "bold"), text_color=C["ink"]).pack(side="left", padx=4, pady=12)
+                         font=F(12, "bold"), text_color=C["ink"]).pack(side="left", padx=4, pady=12)
             ctk.CTkLabel(card, text=f"{r['exception_count']} exceptions  ·  {r['entropy_score']:.1f}% entropy",
-                         font=F(10), text_color=C["muted"]).pack(side="left", padx=12, pady=12)
-            ctk.CTkButton(card, text="Open PDF", width=80, height=30, font=F(10),
+                         font=F(11), text_color=C["muted"]).pack(side="left", padx=12, pady=12)
+            ctk.CTkButton(card, text="Open PDF", width=80, height=32, font=F(11),
                           fg_color=C["purple"], corner_radius=6,
                           command=lambda p=r["report_path"]: (
                               os.startfile(p) if sys.platform == "win32"
@@ -862,7 +950,7 @@ class PayRealityApp:
         scroll.pack(fill="both", expand=True)
 
         def section(title):
-            ctk.CTkLabel(scroll, text=title, font=F(14, "bold"),
+            ctk.CTkLabel(scroll, text=title, font=F(15, "bold"),
                          text_color=C["ink"]).pack(anchor="w", pady=(18, 4))
             ctk.CTkFrame(scroll, height=1, fg_color=C["border"]).pack(fill="x", pady=(0, 12))
 
@@ -871,8 +959,8 @@ class PayRealityApp:
             row.pack(fill="x", pady=4)
             left = ctk.CTkFrame(row, fg_color="transparent")
             left.pack(side="left", fill="both", expand=True, padx=16, pady=10)
-            ctk.CTkLabel(left, text=label, font=F(11, "bold"), text_color=C["ink"]).pack(anchor="w")
-            ctk.CTkLabel(left, text=desc, font=F(9), text_color=C["muted"]).pack(anchor="w", pady=(2, 0))
+            ctk.CTkLabel(left, text=label, font=F(12, "bold"), text_color=C["ink"]).pack(anchor="w")
+            ctk.CTkLabel(left, text=desc, font=F(10), text_color=C["muted"]).pack(anchor="w", pady=(2, 0))
             widget_factory(row)
 
         section("Matching Engine")
@@ -884,7 +972,7 @@ class PayRealityApp:
             f = ctk.CTkFrame(parent, fg_color="transparent")
             f.pack(side="right", padx=16)
             lbl = ctk.CTkLabel(f, text=f"{self._cfg_threshold.get()}%",
-                               font=F(11, "bold"), text_color=C["purple"], width=40)
+                               font=F(12, "bold"), text_color=C["purple"], width=40)
             lbl.pack(side="right")
             ctk.CTkSlider(f, from_=50, to=95, number_of_steps=45,
                           variable=self._cfg_threshold,
@@ -915,10 +1003,10 @@ class PayRealityApp:
             f = ctk.CTkFrame(parent, fg_color="transparent")
             f.pack(side="right", padx=16, pady=8)
             ctk.CTkEntry(f, textvariable=self._cfg_output_dir,
-                         width=240, height=30, font=F(10),
+                         width=240, height=32, font=F(11),
                          fg_color=C["bg"], border_color=C["border"],
                          text_color=C["ink"]).pack(side="left", padx=(0, 6))
-            ctk.CTkButton(f, text="Browse", width=70, height=30, font=F(10),
+            ctk.CTkButton(f, text="Browse", width=70, height=32, font=F(11),
                           fg_color=C["purple"], corner_radius=6,
                           command=self._pick_output_dir,
                           hover=False).pack(side="left")
@@ -927,19 +1015,41 @@ class PayRealityApp:
                     "Where PDF, JSON, and CSV exports are saved",
                     output_dir_widget)
 
+        # Danger Zone
+        section("Data Management")
+
+        danger_card = ctk.CTkFrame(scroll, fg_color=C["coral_lt"], corner_radius=8)
+        danger_card.pack(fill="x", pady=4)
+
+        left = ctk.CTkFrame(danger_card, fg_color="transparent")
+        left.pack(side="left", fill="both", expand=True, padx=16, pady=12)
+
+        ctk.CTkLabel(left, text="Clear All History", font=F(13, "bold"),
+                     text_color=C["danger"]).pack(anchor="w")
+        ctk.CTkLabel(left, text="Delete ALL analysis data for ALL clients. "
+                     "This cannot be undone. Use before showing a new client.",
+                     font=F(10), text_color=C["muted"]).pack(anchor="w", pady=(2, 0))
+
+        ctk.CTkButton(
+            danger_card, text="Clear ALL History", width=140, height=36,
+            fg_color=C["danger"], font=F(12, "bold"), corner_radius=6,
+            command=self._confirm_clear_history,
+            hover=False
+        ).pack(side="right", padx=16, pady=12)
+
         section("Control Taxonomy")
         for cid, tax in CONTROL_TAXONOMY.items():
             card = ctk.CTkFrame(scroll, fg_color=C["card"], corner_radius=8)
             card.pack(fill="x", pady=3)
             sev_c = {"Critical": C["coral"], "High": C["amber"],
                      "Medium": C["purple"], "Low": C["teal"]}.get(tax["severity"], C["muted"])
-            ctk.CTkLabel(card, text=cid, font=F(10, "bold"),
+            ctk.CTkLabel(card, text=cid, font=F(11, "bold"),
                          text_color=C["purple"], width=50).pack(side="left", padx=14, pady=8)
-            ctk.CTkLabel(card, text=tax["name"], font=F(10, "bold"),
+            ctk.CTkLabel(card, text=tax["name"], font=F(11, "bold"),
                          text_color=C["ink"], width=220).pack(side="left", padx=4)
-            ctk.CTkLabel(card, text=tax["category"], font=F(9),
+            ctk.CTkLabel(card, text=tax["category"], font=F(10),
                          text_color=C["muted"], width=180).pack(side="left", padx=4)
-            ctk.CTkLabel(card, text=tax["severity"], font=F(9, "bold"),
+            ctk.CTkLabel(card, text=tax["severity"], font=F(10, "bold"),
                          text_color=sev_c).pack(side="left", padx=4)
 
         ctk.CTkButton(scroll, text="Save Settings", height=40, font=F(13, "bold"),
@@ -969,10 +1079,10 @@ class PayRealityApp:
 
         card = ctk.CTkFrame(scroll, fg_color=C["card"], corner_radius=12)
         card.pack(fill="x", pady=(0, 16))
-        ctk.CTkLabel(card, text="SMTP Configuration", font=F(14, "bold"),
+        ctk.CTkLabel(card, text="SMTP Configuration", font=F(15, "bold"),
                      text_color=C["ink"]).pack(anchor="w", padx=24, pady=(18, 4))
         ctk.CTkLabel(card, text="Credentials are encrypted before storage.",
-                     font=F(9), text_color=C["teal"]).pack(anchor="w", padx=24, pady=(0, 16))
+                     font=F(10), text_color=C["teal"]).pack(anchor="w", padx=24, pady=(0, 16))
 
         form = ctk.CTkFrame(card, fg_color="transparent")
         form.pack(fill="x", padx=24, pady=(0, 20))
@@ -987,10 +1097,10 @@ class PayRealityApp:
         ]
         self._email_entries: Dict[str, ctk.CTkEntry] = {}
         for i, (lbl, ph, key, secret) in enumerate(fields):
-            ctk.CTkLabel(form, text=lbl, font=F(11, "bold"), text_color=C["ink"],
+            ctk.CTkLabel(form, text=lbl, font=F(12, "bold"), text_color=C["ink"],
                          anchor="e", width=130).grid(row=i, column=0,
                          padx=(0, 12), pady=6, sticky="e")
-            e = ctk.CTkEntry(form, placeholder_text=ph, height=34, font=F(11),
+            e = ctk.CTkEntry(form, placeholder_text=ph, height=36, font=F(11),
                              fg_color=C["bg"], border_color=C["border"],
                              text_color=C["ink"], show="•" if secret else "")
             e.grid(row=i, column=1, pady=6, sticky="ew")
@@ -1012,9 +1122,9 @@ class PayRealityApp:
         preview = ctk.CTkFrame(scroll, fg_color=C["card"], corner_radius=12)
         preview.pack(fill="x", pady=(0, 16))
         ctk.CTkLabel(preview, text="Email Template Preview",
-                     font=F(13, "bold"), text_color=C["ink"]).pack(
+                     font=F(14, "bold"), text_color=C["ink"]).pack(
                      anchor="w", padx=24, pady=(16, 8))
-        tpl = ctk.CTkTextbox(preview, height=160, font=F(10), fg_color=C["bg"],
+        tpl = ctk.CTkTextbox(preview, height=160, font=F(11), fg_color=C["bg"],
                               border_width=1, border_color=C["border"],
                               text_color=C["muted"], corner_radius=8)
         tpl.pack(fill="x", padx=24, pady=(0, 16))
@@ -1148,7 +1258,6 @@ class PayRealityApp:
                     threshold, results, report_path,
                 )
 
-                # Invalidate caches [PERF-3, PERF-7]
                 self._cached_chart_hash = None
                 self._history_cache_valid = False
 
@@ -1176,7 +1285,6 @@ class PayRealityApp:
         self._refresh_kpis(results)
         self._refresh_chart()
 
-        # Refresh exceptions tab if it's built [PERF-2]
         if self._exceptions_ui_built:
             self._refresh_exceptions_data()
 
@@ -1200,6 +1308,7 @@ class PayRealityApp:
     # EXPORTS — Background Threads
     # ══════════════════════════════════════════════════════════════════════════
 
+    
     def _export_json_bg(self):
         if not self.current_results:
             messagebox.showwarning("No data", "Run an analysis first.")
@@ -1321,12 +1430,65 @@ class PayRealityApp:
                 messagebox.showerror("Email Error", str(e))
 
     # ══════════════════════════════════════════════════════════════════════════
+    # DATA MANAGEMENT
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _confirm_clear_history(self):
+        history = self.engine.get_history()
+        record_count = len(history)
+        client_names = set(h.get('client_name', 'Unknown') for h in history)
+
+        if record_count == 0:
+            messagebox.showinfo("No Data", "No history to clear.")
+            return
+
+        confirm = messagebox.askyesno(
+            "⚠️ Clear ALL History",
+            f"This will permanently delete:\n\n"
+            f"• {record_count} analysis run(s)\n"
+            f"• {len(client_names)} client(s)\n"
+            f"• All exceptions and audit trails\n\n"
+            f"This CANNOT be undone.\n\n"
+            f"Use this before showing a new client to maintain confidentiality.\n\n"
+            f"Are you absolutely sure?",
+            icon='warning'
+        )
+
+        if not confirm:
+            return
+
+        try:
+            self.engine.clear_all_history()
+            self.current_results = None
+            self._refresh_chart()
+
+            if hasattr(self, "_hist_tree"):
+                self._load_history_rows()
+
+            if hasattr(self, "_kpi_cards"):
+                self._kpi_cards["exceptions"].configure(text="0")
+                self._kpi_cards["spend"].configure(text="R 0")
+                self._kpi_cards["entropy"].configure(text="0.0%")
+                self._kpi_cards["total"].configure(text="0")
+                self._kpi_cards["confidence"].configure(text="—")
+
+            self._run_id_label.configure(text="")
+            self._history_cache_valid = False
+
+            messagebox.showinfo("Cleared",
+                f"Successfully cleared {record_count} analysis run(s).\n\n"
+                f"The application is now ready for a new client.")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to clear history: {str(e)}")
+
+    # ══════════════════════════════════════════════════════════════════════════
     # UTILITIES
     # ══════════════════════════════════════════════════════════════════════════
 
     def _empty_state(self, text: str, parent=None):
         p = parent or self.content
-        ctk.CTkLabel(p, text=text, font=F(13), text_color=C["muted"],
+        ctk.CTkLabel(p, text=text, font=F(14), text_color=C["muted"],
                      justify="center").pack(expand=True)
 
     def run(self):

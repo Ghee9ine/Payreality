@@ -301,6 +301,7 @@ class PayRealityEngine:
             for r in rows
         ]
 
+
     def get_entropy_trend(self) -> List[Dict]:
         with self._db() as conn:
             rows = conn.execute(
@@ -1128,8 +1129,71 @@ class PayRealityEngine:
             "health_label":      "Good" if health_score >= 80 else
                                  "Fair" if health_score >= 60 else "Poor",
         }
-
-    # ── Export ────────────────────────────────────────────────────────────────
+    def clear_all_history(self) -> None:
+        """
+        Delete all analysis data from the database.
+        This completely resets the application state.
+        """
+        import os
+        import time
+        from pathlib import Path
+        
+        self.logger.info("Clearing all history")
+        
+        # Force close ALL database connections
+        try:
+            # Close the main connection if it exists
+            if hasattr(self, '_conn') and self._conn:
+                self._conn.close()
+                self._conn = None
+        except Exception:
+            pass
+        
+        # Also close any connection from _db() method
+        try:
+            if hasattr(self, '_db_conn'):
+                self._db_conn.close()
+                self._db_conn = None
+        except Exception:
+            pass
+        
+        # Get the database path
+        db_path = Path(self.db_path)
+        
+        # Small delay to ensure connections are closed
+        time.sleep(0.1)
+        
+        # Delete the database file
+        if db_path.exists():
+            try:
+                db_path.unlink()
+                self.logger.info(f"Deleted database: {db_path}")
+            except PermissionError as e:
+                self.logger.error(f"Permission denied: {e}")
+                raise Exception(f"Cannot delete database. Please close any other instances of PayReality and try again.\n\nError: {e}")
+            except OSError as e:
+                self.logger.error(f"OS error: {e}")
+                raise Exception(f"Cannot delete database. File may be in use.\n\nError: {e}")
+        
+        # Delete any backup files
+        for backup in db_path.parent.glob(f"{db_path.stem}_backup_*.db"):
+            try:
+                backup.unlink()
+                self.logger.info(f"Deleted backup: {backup}")
+            except Exception:
+                pass
+        
+        # Reinitialize fresh database
+        self._init_db()
+        
+        # Clear any cached data
+        self.master_df = None
+        self.payments_df = None
+        self.current_results = None
+        
+        self.logger.info("History cleared successfully")
+        
+        # ── Export ────────────────────────────────────────────────────────────────
 
     def export_json(self, results: Dict, filepath: str) -> None:
         """Export full results as structured JSON."""
@@ -1208,3 +1272,4 @@ class PayRealityEngine:
         df = pd.DataFrame(rows)
         df.to_csv(filepath, index=False)
         self.logger.info(f"CSV exported: {filepath}")
+        
