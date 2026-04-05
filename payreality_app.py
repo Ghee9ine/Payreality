@@ -155,7 +155,7 @@ class PayRealityApp:
         self._search_var = tk.StringVar()
 
         # Pagination [APP-5]
-        self._exc_page_size = 50
+        self._exc_page_size = 9
         self._exc_current_page = 0
         self._exc_filtered_total = 0
         self._exc_pagination_frame = None
@@ -641,19 +641,25 @@ class PayRealityApp:
         self._render_pagination_controls()
 
     def _render_pagination_controls(self):
+        """Create Previous/Next buttons and page indicator."""
         if not hasattr(self, "_exc_pagination_frame"):
             return
 
+        # Clear existing controls
         for w in self._exc_pagination_frame.winfo_children():
             w.destroy()
 
         total_pages = (self._exc_filtered_total + self._exc_page_size - 1) // self._exc_page_size
+        
+        print(f"DEBUG: Rendering pagination - Total pages: {total_pages}, Current page: {self._exc_current_page}, Total exceptions: {self._exc_filtered_total}")  # Debug
+        
         if total_pages <= 1:
             return
 
         center = ctk.CTkFrame(self._exc_pagination_frame, fg_color="transparent")
         center.pack(anchor="center", pady=8)
 
+        # Previous button
         prev_btn = ctk.CTkButton(
             center, text="← Previous", width=100, height=32,
             font=F(12), fg_color=C["purple"], corner_radius=6,
@@ -663,6 +669,7 @@ class PayRealityApp:
         )
         prev_btn.pack(side="left", padx=5)
 
+        # Page indicator
         page_label = ctk.CTkLabel(
             center,
             text=f"Page {self._exc_current_page + 1} of {total_pages}  ({self._exc_filtered_total} exceptions)",
@@ -670,6 +677,7 @@ class PayRealityApp:
         )
         page_label.pack(side="left", padx=15)
 
+        # Next button
         next_btn = ctk.CTkButton(
             center, text="Next →", width=100, height=32,
             font=F(12), fg_color=C["purple"], corner_radius=6,
@@ -678,7 +686,10 @@ class PayRealityApp:
             hover=False,
         )
         next_btn.pack(side="left", padx=5)
-
+        
+        # Force update
+        self._exc_pagination_frame.update_idletasks()
+        
     def _on_search_changed(self, *args):
         try:
             if not self.root.winfo_exists():

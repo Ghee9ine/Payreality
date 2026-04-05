@@ -12,6 +12,27 @@ PayReality applies a multi-layered semantic approach to uncover discrepancies ca
 
 ---
 
+## Quick Start
+
+### Download Executable (No Python Required)
+
+| Platform | Download |
+|----------|----------|
+| Windows | [PayReality.exe](dist/PayReality.exe) |
+
+Just double-click to run. No installation. No dependencies.
+
+### Or Run from Source
+
+```bash
+git clone https://github.com/Ghee9ine/Payreality.git
+cd Payreality
+pip install -r requirements.txt
+python payreality_app.py
+```
+
+---
+
 ## Table of Contents
 
 - [The PayReality Vocabulary](#the-payreality-vocabulary)
@@ -27,6 +48,7 @@ PayReality applies a multi-layered semantic approach to uncover discrepancies ca
 - [Audit Trail](#audit-trail)
 - [Vendor Master Health Scoring](#vendor-master-health-scoring)
 - [Reporting & Exports](#reporting--exports)
+- [Pagination & Filtering](#pagination--filtering)
 - [Trend Analysis](#trend-analysis)
 - [Privacy-First Architecture](#privacy-first-architecture)
 - [Installation](#installation)
@@ -240,6 +262,14 @@ Evaluates structural quality of the vendor master to detect identity hallucinati
 
 **White-label PDF reports** available for audit firm partners.
 
+### Pagination & Filtering
+
+- Load 25/50/100/250 exceptions per page
+- Filter by risk level (High/Medium/Low)
+- Filter by control type (AVC, OBC, etc.)
+- Search by payee name
+- Sort by confidence, amount, or risk
+
 ### Trend Analysis
 
 - Historical CES tracking over time (control entropy visualization)
@@ -276,41 +306,20 @@ It gives auditors language for phenomena they've always seen but never named: **
 
 ## Installation
 
-### Prerequisites
+### Download Executable (Recommended)
 
-- Python 3.10 or higher
-- pip package manager
+1. Download `PayReality.exe` from the [releases page](https://github.com/Ghee9ine/Payreality/releases) or the `dist` folder
+2. Double-click to run
+3. No Python required. No installation.
 
-### Clone Repository
+### Run from Source
+
+**Prerequisites:** Python 3.10 or higher
 
 ```bash
 git clone https://github.com/Ghee9ine/Payreality.git
 cd Payreality
-```
-
-### Virtual Environment
-
-**macOS/Linux:**
-```bash
-python -m venv venv
-source venv/bin/activate
-```
-
-**Windows:**
-```bash
-python -m venv venv
-venv\Scripts\activate
-```
-
-### Install Dependencies
-
-```bash
 pip install -r requirements.txt
-```
-
-### Run Application
-
-```bash
 python payreality_app.py
 ```
 
@@ -399,16 +408,20 @@ After first run, edit `payreality_config.json`:
 
 ```
 Payreality/
+├── payreality_app.py      # Main desktop application
 ├── src/
-│   ├── core.py
-│   ├── parser.py
-│   ├── reporting.py
-│   └── config.py
+│   ├── core.py            # 7-pass engine, CES, audit trail
+│   ├── parser.py          # CSV/Excel/PDF parsing
+│   ├── reporting.py       # PDF report generation
+│   └── config.py          # Configuration management
+├── tests/
+│   └── test_payreality.py # Unit tests (26 passing)
 ├── data/
 │   ├── sample/
 │   └── test_data/
 ├── logs/
-├── payreality_app.py
+├── dist/
+│   └── PayReality.exe     # Standalone executable (no Python required)
 ├── generate_test_data.py
 ├── requirements.txt
 └── README.md
@@ -420,10 +433,12 @@ Payreality/
 
 | Problem | Solution |
 |---------|----------|
+| App won't open | Make sure all files are extracted from zip |
 | Missing columns | Rename to payee_name and amount |
 | File not found | Use file browser |
 | Empty file | Ensure at least one row |
 | PDF extraction fails | Ensure PDF contains selectable text (OCR requires Tesseract) |
+| No exceptions | Your vendor master may have all payments approved |
 
 ---
 
