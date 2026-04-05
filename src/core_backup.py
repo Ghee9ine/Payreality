@@ -524,29 +524,29 @@ class PayRealityEngine:
                     break
         return n
 
-    def phonetic_key(self, text: str) -> str:
-        """Generate a phonetic key for fuzzy matching."""
-        if not text:
-            return ""
-        
-        t = text.lower()
-        
-        # Replace common patterns
-        t = re.sub(r"ph", "f", t)
-        t = re.sub(r"gh", "f", t)
-        t = re.sub(r"ck", "k", t)
-        t = re.sub(r"sh", "x", t)
-        t = re.sub(r"ch", "x", t)
-        t = re.sub(r"th", "t", t)
-        t = re.sub(r"y", "i", t)
-        
-        # Remove vowels
-        t = re.sub(r"[aeiou]", "", t)
-        
-        # Remove duplicates
-        t = re.sub(r"(.)\1+", r"\1", t)
-        
-        return t
+def phonetic_key(self, text: str) -> str:
+    """Generate a phonetic key for fuzzy matching."""
+    if not text:
+        return ""
+    
+    t = text.lower()
+    
+    # Replace common patterns
+    t = re.sub(r"ph", "f", t)
+    t = re.sub(r"gh", "f", t)
+    t = re.sub(r"ck", "k", t)
+    t = re.sub(r"sh", "x", t)
+    t = re.sub(r"ch", "x", t)
+    t = re.sub(r"th", "t", t)
+    t = re.sub(r"y", "i", t)      # <-- THIS FIXES smyth -> smith
+    
+    # Remove vowels
+    t = re.sub(r"[aeiou]", "", t)
+    
+    # Remove duplicates
+    t = re.sub(r"(.)\1+", r"\1", t)
+    
+    return t
     def detect_obfuscation(self, name: str,
                             master_clean: Optional[List[str]] = None,
                             threshold: int = 80) -> Tuple[bool, str, str]:

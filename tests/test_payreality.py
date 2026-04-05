@@ -59,7 +59,7 @@ class TestPhoneticKey:
         engine = PayRealityEngine()
         key1 = engine.phonetic_key("smith")
         key2 = engine.phonetic_key("smyth")
-        assert key1 == key2 or key1 == key2  # Should be similar
+        assert key1 == key2
 
 
 class TestObfuscationDetection:
