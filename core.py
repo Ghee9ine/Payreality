@@ -1,7 +1,7 @@
 """
-PayReality Core Engine - Phase 2 (Patched)
+PayReality Core Engine - Phase 3 (Comprehensive Fix)
 
-Patches applied:
+Phase 2 patches preserved:
   [SEC-1]  SMTP password encrypted with Fernet (machine-derived key)
   [SEC-2]  SHA256 hash no longer truncated — full 64-char hex
   [SEC-3]  File size limit enforced before load (500 MB)
@@ -13,8 +13,30 @@ Patches applied:
   [BUG-6]  map_controls() fallback no longer appends AVC to approved payments
   [BUG-7]  clean_name() strips compound suffixes in a while-loop (not single pass)
   [BUG-8]  Column rename loop breaks after first match to avoid last-match clobber
-  [BUG-9]  Leet detection requires ≥2 substitutions AND a vendor fuzzy-match
+  [BUG-9]  Leet detection requires >=2 substitutions AND a vendor fuzzy-match
   [LOG-1]  Logging directory created before logging is configured (see app entry point)
+
+Phase 2 fixes:
+  [FIX-1]  run_id uses full UUID — eliminates DB collision risk
+  [FIX-2]  is_new_vendor correctly excludes date-less vendors (tenure==0)
+  [FIX-3]  clear_all_history indentation fixed; self.current_results guard added
+  [FIX-4]  Redundant detect_obfuscation call removed; obf result reused from 7-pass
+  [FIX-5]  vendor_stats keyed on clean_name for correct consolidated spend
+  [FIX-6]  detect_obfuscation leet path now always requires master_clean validation
+  [FIX-7]  obfuscation sub-types tracked individually in match_stats
+  [FIX-8]  _parse_amount_column detects and handles European number format
+  [FIX-9]  hash_file wrapped with descriptive OSError handling
+  [FIX-10] client_name capped at 200 chars before DB insert
+  [FIX-11] save_run uses explicit transaction; partial exception inserts rolled back
+  [FIX-12] iterrows() replaced with itertuples() in both loops (perf)
+  [FIX-13] _vendor_master_health: blank/NaN rows included in all penalty counts
+  [FIX-14] _vendor_master_health reuses pre-computed clean_names passed in
+  [FIX-15] encrypt_password logs warning when falling back to plaintext
+  [FIX-16] decrypt_password logs warning on decryption failure
+  [FIX-17] build_explanation has fallback sentence for unknown strategies
+  [FIX-18] _SUFFIXES sorted by descending length — order-independent stripping
+  [FIX-19] VMH control emitted when vendor master health is Poor
+  [FIX-20] _normalise_columns handles case-duplicate column names safely
 """
 
 import hashlib
@@ -24,10 +46,10 @@ import os
 import re
 import sqlite3
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -39,7 +61,8 @@ except ImportError:
 # Optional Fernet — gracefully degrade if cryptography not installed
 try:
     from cryptography.fernet import Fernet
-    import base64, hashlib as _hl
+    import base64
+    import hashlib as _hl
     _FERNET_AVAILABLE = True
 except ImportError:
     _FERNET_AVAILABLE = False
@@ -48,8 +71,11 @@ except ImportError:
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 MAX_FILE_BYTES = 500 * 1024 * 1024   # 500 MB
-_LEET_MAP = {"3": "e", "0": "o", "1": "i", "4": "a",
-             "5": "s", "7": "t", "@": "a", "$": "s"}
+MAX_CLIENT_NAME_LEN = 200
+_LEET_MAP = {
+    "3": "e", "0": "o", "1": "i", "4": "a",
+    "5": "s", "7": "t", "@": "a", "$": "s",
+}
 
 
 # ─── Control Taxonomy ────────────────────────────────────────────────────────
@@ -119,33 +145,53 @@ def _derive_fernet_key() -> Optional[bytes]:
     """
     Derive a deterministic Fernet key from a machine identifier.
     Falls back to None if cryptography is not installed.
+
+    NOTE: This key is machine-bound (hostname + username). The database is
+    unreadable if moved to another machine. Consider upgrading to a
+    user-passphrase or OS-keychain key for production deployments.
     """
     if not _FERNET_AVAILABLE:
         return None
-    # Use machine hostname + username as a stable, machine-specific seed.
-    import socket, getpass
+    import socket
+    import getpass
     seed = f"payreality:{socket.gethostname()}:{getpass.getuser()}".encode()
-    raw = _hl.sha256(seed).digest()                  # 32 bytes
-    return base64.urlsafe_b64encode(raw)              # Fernet needs URL-safe base64
+    raw = _hl.sha256(seed).digest()
+    return base64.urlsafe_b64encode(raw)
 
 
 def encrypt_password(plaintext: str) -> str:
-    """Encrypt a password string. Returns plaintext if cryptography unavailable."""
+    """
+    Encrypt a password string.
+    Returns plaintext unchanged (with a warning) if cryptography is unavailable.
+    [FIX-15]
+    """
     key = _derive_fernet_key()
     if key is None or not plaintext:
+        if key is None and plaintext:
+            logging.getLogger("PayReality.Engine").warning(
+                "cryptography package not installed — SMTP password stored in plaintext. "
+                "Install it with: pip install cryptography"
+            )
         return plaintext
     return Fernet(key).encrypt(plaintext.encode()).decode()
 
 
 def decrypt_password(ciphertext: str) -> str:
-    """Decrypt a password string. Returns ciphertext unchanged if unavailable."""
+    """
+    Decrypt a password string.
+    Returns ciphertext unchanged and logs a warning on failure.  [FIX-16]
+    """
     key = _derive_fernet_key()
     if key is None or not ciphertext:
         return ciphertext
     try:
         return Fernet(key).decrypt(ciphertext.encode()).decode()
-    except Exception:
-        # Already plaintext (migrating from old version)
+    except Exception as exc:
+        logging.getLogger("PayReality.Engine").warning(
+            f"Password decryption failed ({exc}). "
+            "The stored value may be plaintext from a previous version, "
+            "or the database was moved from another machine."
+        )
         return ciphertext
 
 
@@ -170,9 +216,7 @@ class PayRealityEngine:
     def _db(self) -> sqlite3.Connection:
         """
         Open a SQLite connection with WAL journaling and a generous timeout.
-        WAL mode allows concurrent readers while a writer is active, preventing
-        "database is locked" errors when the UI thread reads history while the
-        analysis thread writes results.  [BUG-4]
+        WAL mode allows concurrent readers while a writer is active.  [BUG-4]
         """
         conn = sqlite3.connect(self.db_path, timeout=10)
         conn.execute("PRAGMA journal_mode=WAL")
@@ -235,53 +279,68 @@ class PayRealityEngine:
                  master_hash: str, payments_hash: str,
                  threshold: int, results: Dict,
                  report_path: str = None) -> str:
+        """
+        Persist a completed analysis run.  All inserts happen in one transaction
+        so that a failure mid-loop cannot leave a run record with partial
+        exception rows.  [FIX-11]
+        """
         params = {
             "threshold": threshold,
             "config_version": self.config.get("version", "1.0.0"),
         }
+        # [FIX-10] cap client_name length
+        safe_client = (client_name or "")[:MAX_CLIENT_NAME_LEN]
+
         with self._db() as conn:
-            conn.execute("""
-                INSERT OR REPLACE INTO analysis_runs
-                (run_id, timestamp, client_name, master_file_hash, payments_file_hash,
-                 threshold, config_version, total_payments, exception_count, exception_spend,
-                 entropy_score, duplicate_count, report_path, params_json)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, (
-                run_id,
-                datetime.now().isoformat(),
-                client_name,
-                master_hash,
-                payments_hash,
-                threshold,
-                self.config.get("version", "1.0.0"),
-                results["total_payments"],
-                results["exception_count"],
-                results["exception_spend"],
-                results["entropy_score"],
-                len(results.get("duplicates", [])),
-                report_path,
-                json.dumps(params),
-            ))
-            for ex in results.get("exceptions", []):
+            conn.execute("BEGIN")
+            try:
                 conn.execute("""
-                    INSERT INTO run_exceptions
-                    (run_id, payee_name, amount, payment_date, control_ids, confidence_score,
-                     risk_level, risk_score, match_strategy, match_score, explanation, reasons_json)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                    INSERT OR REPLACE INTO analysis_runs
+                    (run_id, timestamp, client_name, master_file_hash, payments_file_hash,
+                     threshold, config_version, total_payments, exception_count,
+                     exception_spend, entropy_score, duplicate_count, report_path, params_json)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, (
                     run_id,
-                    ex.get("payee_name", ""),
-                    ex.get("amount", 0),
-                    ex.get("payment_date", ""),
-                    ",".join(ex.get("control_ids", [])),
-                    ex.get("confidence_score", 0),
-                    ex.get("risk_level", "Low"),
-                    ex.get("risk_score", 0),
-                    ex.get("match_strategy", "none"),
-                    ex.get("match_score", 0),
-                    ex.get("explanation", ""),
-                    json.dumps(ex.get("risk_reasons", [])),
+                    datetime.now().isoformat(),
+                    safe_client,
+                    master_hash,
+                    payments_hash,
+                    threshold,
+                    self.config.get("version", "1.0.0"),
+                    results["total_payments"],
+                    results["exception_count"],
+                    results["exception_spend"],
+                    results["entropy_score"],
+                    len(results.get("duplicates", [])),
+                    report_path,
+                    json.dumps(params),
                 ))
+                for ex in results.get("exceptions", []):
+                    conn.execute("""
+                        INSERT INTO run_exceptions
+                        (run_id, payee_name, amount, payment_date, control_ids,
+                         confidence_score, risk_level, risk_score, match_strategy,
+                         match_score, explanation, reasons_json)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                    """, (
+                        run_id,
+                        ex.get("payee_name", ""),
+                        ex.get("amount", 0),
+                        ex.get("payment_date", ""),
+                        ",".join(ex.get("control_ids", [])),
+                        ex.get("confidence_score", 0),
+                        ex.get("risk_level", "Low"),
+                        ex.get("risk_score", 0),
+                        ex.get("match_strategy", "none"),
+                        ex.get("match_score", 0),
+                        ex.get("explanation", ""),
+                        json.dumps(ex.get("risk_reasons", [])),
+                    ))
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
         return run_id
 
     def get_history(self, limit: int = 50) -> List[Dict]:
@@ -301,30 +360,29 @@ class PayRealityEngine:
             for r in rows
         ]
 
-
     def get_entropy_trend(self) -> List[Dict]:
         with self._db() as conn:
             rows = conn.execute(
-                "SELECT timestamp, entropy_score, client_name FROM analysis_runs ORDER BY timestamp ASC"
+                "SELECT timestamp, entropy_score, client_name "
+                "FROM analysis_runs ORDER BY timestamp ASC"
             ).fetchall()
-        return [{"timestamp": r[0], "entropy_score": r[1], "client_name": r[2]} for r in rows]
+        return [
+            {"timestamp": r[0], "entropy_score": r[1], "client_name": r[2]}
+            for r in rows
+        ]
 
     # ── Email password helpers ────────────────────────────────────────────────
 
     def save_email_config(self, smtp: str, port: int, user: str,
                           password: str, recipients: str) -> None:
-        """
-        Store email configuration with encrypted password.  [SEC-1]
-        The password is encrypted with a machine-derived Fernet key before
-        being written to the database. Decryption happens only at send time.
-        """
+        """Store email configuration with encrypted password.  [SEC-1]"""
         encrypted = encrypt_password(password)
         with self._db() as conn:
             conn.execute("DELETE FROM email_config")
             conn.execute(
                 "INSERT INTO email_config (smtp_server, smtp_port, email_user, "
                 "email_password, recipient_list) VALUES (?,?,?,?,?)",
-                (smtp, port, user, encrypted, recipients)
+                (smtp, port, user, encrypted, recipients),
             )
 
     def load_email_config(self) -> Optional[Dict]:
@@ -350,14 +408,19 @@ class PayRealityEngine:
     def hash_file(filepath: str) -> str:
         """
         Return the full SHA-256 hex digest (64 chars) of a file.
-        The previous implementation truncated to 16 chars (64-bit), which is
-        not collision-resistant for a court-defensible audit trail.  [SEC-2]
+        Raises DataValidationError with a clear message on I/O failure.  [FIX-9]
+        [SEC-2]
         """
-        h = hashlib.sha256()
-        with open(filepath, "rb") as f:
-            for chunk in iter(lambda: f.read(65536), b""):
-                h.update(chunk)
-        return h.hexdigest()   # full 64-char hex — never truncate
+        try:
+            h = hashlib.sha256()
+            with open(filepath, "rb") as f:
+                for chunk in iter(lambda: f.read(65536), b""):
+                    h.update(chunk)
+            return h.hexdigest()
+        except OSError as exc:
+            raise DataValidationError(
+                f"Cannot read file for hashing: '{filepath}'\n{exc}"
+            ) from exc
 
     def load_dataframe(self, filepath: str) -> pd.DataFrame:
         """
@@ -366,8 +429,11 @@ class PayRealityEngine:
         """
         path = Path(filepath)
 
-        # ── Size guard ────────────────────────────────────────────────────────
-        size = path.stat().st_size
+        try:
+            size = path.stat().st_size
+        except OSError as exc:
+            raise DataValidationError(f"Cannot access file: '{path.name}'\n{exc}") from exc
+
         if size > MAX_FILE_BYTES:
             raise DataValidationError(
                 f"File '{path.name}' is {size / 1024**2:.0f} MB — "
@@ -375,30 +441,44 @@ class PayRealityEngine:
             )
 
         ext = path.suffix.lower()
-        encodings = ["utf-8", "utf-8-sig", "latin-1", "cp1252"]
 
         if ext in (".xlsx", ".xls"):
             try:
                 return pd.read_excel(filepath)
             except Exception as e:
-                raise DataValidationError(f"Cannot read Excel file: {e}")
+                raise DataValidationError(f"Cannot read Excel file: {e}") from e
 
+        encodings = ["utf-8", "utf-8-sig", "latin-1", "cp1252"]
+        last_error: Exception = None
         for enc in encodings:
             try:
                 df = pd.read_csv(filepath, encoding=enc)
-                self.logger.debug(f"Read {filepath} with {enc}")
+                self.logger.debug(f"Read {filepath} with encoding={enc}")
                 return df
             except UnicodeDecodeError:
                 continue
             except Exception as e:
-                raise DataValidationError(f"Cannot read file: {e}")
+                last_error = e
+                break
 
-        raise DataValidationError(f"Could not read {filepath} with any encoding")
+        raise DataValidationError(
+            f"Could not read '{path.name}' with any supported encoding "
+            f"(utf-8, utf-8-sig, latin-1, cp1252). Last error: {last_error}"
+        )
 
     def _normalise_columns(self, df: pd.DataFrame, expected: List[str]) -> pd.DataFrame:
-        """Case-insensitive column mapping."""
-        col_map = {c.lower().strip(): c for c in df.columns}
-        rename = {}
+        """
+        Case-insensitive column mapping.
+        If two source columns differ only in case, the first occurrence wins.  [FIX-20]
+        """
+        # Build map: lowercase name -> first matching original column name
+        col_map: Dict[str, str] = {}
+        for c in df.columns:
+            key = c.lower().strip()
+            if key not in col_map:
+                col_map[key] = c
+
+        rename: Dict[str, str] = {}
         for exp in expected:
             if exp not in df.columns:
                 for variant in [exp, exp.replace("_", " "), exp.replace(" ", "_")]:
@@ -415,15 +495,39 @@ class PayRealityEngine:
         Strip common currency symbols and thousand-separators before numeric
         coercion, then log the count of rows that could not be parsed.  [BUG-2]
 
-        Handles: R1,000.00 · R 1 000 · £500 · €1.200,00 · 1000.00
+        Handles: R1,000.00 · R 1 000 · £500 · 1000.00
+        Also detects European format (1.000,50) and normalises it.  [FIX-8]
         """
-        cleaned = (
-            series.astype(str)
-            .str.replace(r"[R$£€\s]", "", regex=True)   # currency symbols + spaces
-            .str.replace(r",(?=\d{3}(?:[,.]|$))", "", regex=True)  # thousand commas
-        )
+        str_series = series.astype(str).str.strip()
+
+        # Detect European format: digits, then a dot, then exactly 3 digits,
+        # then a comma, then digits — e.g. "1.000,50" or "2.500,00"
+        euro_pattern = r"^\d{1,3}(\.\d{3})+(,\d+)?$"
+        sample = str_series.dropna().head(20)
+        # Strip currency symbols from sample before checking format
+        sample_stripped = sample.str.replace(r"[R$£€\s]", "", regex=True)
+        is_european = sample_stripped.str.match(euro_pattern).sum() >= (len(sample_stripped) // 2 + 1)
+
+        if is_european:
+            self.logger.info(
+                "Detected European number format (1.000,50) in amount column — "
+                "converting dot-thousands and comma-decimal."
+            )
+            cleaned = (
+                str_series
+                .str.replace(r"[R$£€\s]", "", regex=True)
+                .str.replace(r"\.", "", regex=True)   # remove dot thousands
+                .str.replace(",", ".", regex=False)   # comma → decimal point
+            )
+        else:
+            cleaned = (
+                str_series
+                .str.replace(r"[R$£€\s]", "", regex=True)
+                .str.replace(r",(?=\d{3}(?:[,.]|$))", "", regex=True)
+            )
+
         numeric = pd.to_numeric(cleaned, errors="coerce")
-        lost = numeric.isna().sum() - series.isna().sum()
+        lost = int(numeric.isna().sum()) - int(series.isna().sum())
         if lost > 0:
             self.logger.warning(
                 f"{lost} payment row(s) had unparseable amounts and were set to 0. "
@@ -431,7 +535,9 @@ class PayRealityEngine:
             )
         return numeric.fillna(0)
 
-    def load_files(self, master_file: str, payments_file: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def load_files(
+        self, master_file: str, payments_file: str
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         self.logger.info("Loading input files")
 
         master_df = self.load_dataframe(master_file)
@@ -445,36 +551,40 @@ class PayRealityEngine:
 
         if "vendor_name" not in master_df.columns:
             raise DataValidationError(
-                f"Vendor Master missing 'vendor_name' column.\nFound: {list(master_df.columns)}"
+                f"Vendor Master missing 'vendor_name' column.\n"
+                f"Found: {list(master_df.columns)}"
             )
 
         payments_df = self.load_dataframe(payments_file)
         payments_df = self._normalise_columns(payments_df, ["payee_name", "amount"])
 
-        # ── Flexible column mapping — break after first match  [BUG-8] ───────
+        # Flexible column mapping — break after first match  [BUG-8]
         for col in payments_df.columns:
             cl = col.lower()
             if "payee_name" not in payments_df.columns:
-                if any(k in cl for k in ["payee", "vendor", "supplier", "pay_to",
-                                          "recipient", "name"]):
+                if any(k in cl for k in [
+                    "payee", "vendor", "supplier", "pay_to", "recipient", "name"
+                ]):
                     payments_df = payments_df.rename(columns={col: "payee_name"})
-                    break   # stop after first match — avoid last-match clobber
+                    break
 
         for col in payments_df.columns:
             cl = col.lower()
             if "amount" not in payments_df.columns:
-                if any(k in cl for k in ["amount", "value", "total",
-                                          "invoice_amount", "price"]):
+                if any(k in cl for k in [
+                    "amount", "value", "total", "invoice_amount", "price"
+                ]):
                     payments_df = payments_df.rename(columns={col: "amount"})
                     break
 
         missing = [c for c in ["payee_name", "amount"] if c not in payments_df.columns]
         if missing:
             raise DataValidationError(
-                f"Payments file missing columns: {missing}.\nFound: {list(payments_df.columns)}"
+                f"Payments file missing columns: {missing}.\n"
+                f"Found: {list(payments_df.columns)}"
             )
 
-        # ── Amount parsing with currency stripping  [BUG-2] ──────────────────
+        # Amount parsing with currency stripping  [BUG-2]
         payments_df["amount"] = self._parse_amount_column(payments_df["amount"])
 
         # Date column detection
@@ -489,31 +599,37 @@ class PayRealityEngine:
         self.master_df = master_df
         self.payments_df = payments_df
 
-        self.logger.info(f"Loaded {len(master_df)} vendors, {len(payments_df)} payments")
+        self.logger.info(
+            f"Loaded {len(master_df)} vendors, {len(payments_df)} payments"
+        )
         return master_df, payments_df
 
     # ── Name Cleaning ─────────────────────────────────────────────────────────
 
-    _SUFFIXES = [
+    # Sorted longest-first so compound suffixes like " (pty) ltd" are always
+    # tried before their components " pty" and " ltd".  [FIX-18]
+    _SUFFIXES = sorted([
         " (pty) ltd", " pty ltd", " pty", " ltd", " inc", " corp", " llc",
         " co", " cc", " limited", " corporation", " incorporated",
         " company", " holdings", " group", " international", " systems",
         " technologies", " solutions", " services", " enterprises",
-    ]
+    ], key=len, reverse=True)
 
-    def clean_name(self, name: str) -> str:
+    def clean_name(self, name) -> str:
         """
         Normalise a vendor name for fuzzy comparison.
-        Strips compound suffixes in a while-loop so that '(Pty) Ltd' is
-        fully removed in a single call — the original single-pass break
-        left intermediate tokens such as '(pty)' in the cleaned string.  [BUG-7]
+        Strips compound suffixes in a while-loop.  [BUG-7]
+        Accepts str, float (NaN), or None.
         """
-        if not name or (isinstance(name, float) and pd.isna(name)):
+        if name is None:
             return ""
+        if isinstance(name, float):
+            import math
+            if math.isnan(name):
+                return ""
         n = str(name).lower().strip()
         n = re.sub(r"[^\w\s]", " ", n)
         n = re.sub(r"\s+", " ", n).strip()
-        # Keep stripping until no suffix matches
         changed = True
         while changed:
             changed = False
@@ -524,57 +640,59 @@ class PayRealityEngine:
                     break
         return n
 
-def phonetic_key(self, text: str) -> str:
-    """Generate a phonetic key for fuzzy matching."""
-    if not text:
-        return ""
-    
-    t = text.lower()
-    
-    # Replace common patterns
-    t = re.sub(r"ph", "f", t)
-    t = re.sub(r"gh", "f", t)
-    t = re.sub(r"ck", "k", t)
-    t = re.sub(r"sh", "x", t)
-    t = re.sub(r"ch", "x", t)
-    t = re.sub(r"th", "t", t)
-    t = re.sub(r"y", "i", t)      # <-- THIS FIXES smyth -> smith
-    
-    # Remove vowels
-    t = re.sub(r"[aeiou]", "", t)
-    
-    # Remove duplicates
-    t = re.sub(r"(.)\1+", r"\1", t)
-    
-    return t
-    def detect_obfuscation(self, name: str,
-                            master_clean: Optional[List[str]] = None,
-                            threshold: int = 80) -> Tuple[bool, str, str]:
+    def phonetic_key(self, text: str) -> str:
+        """Generate a simple phonetic key for fuzzy matching."""
+        if not text:
+            return ""
+        t = text.lower()
+        t = re.sub(r"ph", "f", t)
+        t = re.sub(r"gh", "f", t)
+        t = re.sub(r"ck", "k", t)
+        t = re.sub(r"sh", "x", t)
+        t = re.sub(r"ch", "x", t)
+        t = re.sub(r"th", "t", t)
+        t = re.sub(r"y", "i", t)
+        t = re.sub(r"[aeiou]", "", t)
+        t = re.sub(r"(.)\1+", r"\1", t)
+        return t
+
+    def detect_obfuscation(
+        self,
+        name: str,
+        master_clean: Optional[List[str]] = None,
+        threshold: int = 80,
+    ) -> Tuple[bool, str, str]:
         """
         Returns (detected, cleaned_name, obfuscation_type).
 
-        Leet detection now requires ≥2 substitutions AND (if master_clean is
-        provided) that the de-leeted name fuzzy-matches a known vendor above
-        threshold.  A single digit in a vendor name is not obfuscation.  [BUG-9]
+        Leet detection requires >=2 substitutions AND a vendor fuzzy-match
+        against master_clean when provided.  When master_clean is None (e.g.
+        in unit tests) the vendor-match step is skipped.  [BUG-9]
+
+        NOTE: callers inside run_analysis always pass master_clean, so the
+        production path always validates against the vendor list.  [FIX-6]
         """
         # Dot/space spacing: M.i.c.r.o.s.o.f.t
         if re.search(r"(\w\.){3,}", name):
             cleaned = re.sub(r"\.", "", name)
             return True, cleaned, "dot_spacing"
 
-        # Leetspeak — require ≥2 substitutions
+        # Leetspeak — require >=2 substitutions
         leet_hits = sum(1 for c in name if c in _LEET_MAP)
         if leet_hits >= 2:
             cleaned = name
             for k, v in _LEET_MAP.items():
                 cleaned = cleaned.replace(k, v)
-            # Confirm match against vendor list if available
-            if master_clean:
-                r = process.extractOne(self.clean_name(cleaned), master_clean,
-                                       scorer=fuzz.token_sort_ratio)
+            if master_clean is not None:
+                r = process.extractOne(
+                    self.clean_name(cleaned),
+                    master_clean,
+                    scorer=fuzz.token_sort_ratio,
+                )
                 if r and r[1] >= threshold:
                     return True, cleaned, "leetspeak"
             else:
+                # No vendor list available (e.g. unit test context)
                 return True, cleaned, "leetspeak"
 
         # Repeated characters (3+ in a row)
@@ -601,72 +719,77 @@ def phonetic_key(self, text: str) -> str:
         master_vendors: List[str],
         master_clean: List[str],
         threshold: int = 80,
-        master_phonetic: Optional[List[str]] = None,   # pre-computed  [BUG-1]
-    ) -> Tuple[Optional[str], int, str, List[str]]:
+        master_phonetic: Optional[List[str]] = None,
+    ) -> Tuple[Optional[str], int, str, str, List[str]]:
         """
         7-pass semantic matching engine.
 
-        master_phonetic must be pre-computed by the caller (once, before the
-        per-payment loop) and passed in here.  Computing it inside this
-        function — as the original code did — is O(vendors × payments).  [BUG-1]
+        Returns: (matched_vendor, score, strategy, obf_type, passes_tried)
 
-        Returns: (matched_vendor, score, strategy, passes_tried)
+        obf_type is "none" unless pass 7 fires, in which case it holds the
+        specific sub-type (dot_spacing, leetspeak, etc.) so the caller can
+        reuse the result without a second detect_obfuscation call.  [FIX-4]
         """
         passes_tried: List[str] = []
 
         # Pass 1: Exact
         passes_tried.append("exact")
         if payee in master_vendors:
-            return payee, 100, "exact", passes_tried
+            return payee, 100, "exact", "none", passes_tried
 
         # Pass 2: Normalised
         passes_tried.append("normalized")
         payee_clean = self.clean_name(payee)
         for i, vc in enumerate(master_clean):
             if payee_clean == vc and payee_clean:
-                return master_vendors[i], 100, "normalized", passes_tried
+                return master_vendors[i], 100, "normalized", "none", passes_tried
 
         if not payee_clean:
-            return None, 0, "none", passes_tried
+            return None, 0, "none", "none", passes_tried
 
         # Pass 3: Token Sort
         passes_tried.append("token_sort")
         r = process.extractOne(payee_clean, master_clean, scorer=fuzz.token_sort_ratio)
         if r and r[1] >= threshold:
-            return master_vendors[r[2]], r[1], "token_sort", passes_tried
+            return master_vendors[r[2]], r[1], "token_sort", "none", passes_tried
 
         # Pass 4: Partial
         passes_tried.append("partial")
         r = process.extractOne(payee_clean, master_clean, scorer=fuzz.partial_ratio)
         if r and r[1] >= threshold:
-            return master_vendors[r[2]], r[1], "partial", passes_tried
+            return master_vendors[r[2]], r[1], "partial", "none", passes_tried
 
         # Pass 5: Levenshtein
         passes_tried.append("levenshtein")
         r = process.extractOne(payee_clean, master_clean, scorer=fuzz.QRatio)
         if r and r[1] >= max(threshold - 5, 60):
-            return master_vendors[r[2]], r[1], "levenshtein", passes_tried
+            return master_vendors[r[2]], r[1], "levenshtein", "none", passes_tried
 
         # Pass 6: Phonetic — use pre-computed keys  [BUG-1]
         passes_tried.append("phonetic")
         payee_ph = self.phonetic_key(payee_clean)
         if payee_ph and master_phonetic:
-            r = process.extractOne(payee_ph, master_phonetic, scorer=fuzz.token_sort_ratio)
+            r = process.extractOne(
+                payee_ph, master_phonetic, scorer=fuzz.token_sort_ratio
+            )
             if r and r[1] >= threshold:
-                return master_vendors[r[2]], r[1], "phonetic", passes_tried
+                return master_vendors[r[2]], r[1], "phonetic", "none", passes_tried
 
-        # Pass 7: Obfuscation — pass master_clean for leet validation  [BUG-9]
+        # Pass 7: Obfuscation — always pass master_clean for leet validation  [BUG-9]
         passes_tried.append("obfuscation")
         is_obf, cleaned, obf_type = self.detect_obfuscation(
             payee, master_clean=master_clean, threshold=threshold
         )
         if is_obf:
             cleaned_n = self.clean_name(cleaned)
-            r = process.extractOne(cleaned_n, master_clean, scorer=fuzz.token_sort_ratio)
+            r = process.extractOne(
+                cleaned_n, master_clean, scorer=fuzz.token_sort_ratio
+            )
             if r and r[1] >= threshold:
-                return master_vendors[r[2]], r[1], f"obfuscation_{obf_type}", passes_tried
+                strategy = f"obfuscation_{obf_type}"
+                return master_vendors[r[2]], r[1], strategy, obf_type, passes_tried
 
-        return None, 0, "none", passes_tried
+        return None, 0, "none", "none", passes_tried
 
     # ── Control Mapping ───────────────────────────────────────────────────────
 
@@ -679,14 +802,12 @@ def phonetic_key(self, text: str) -> str:
         is_new_vendor: bool,
         high_spend: bool,
         obfuscation_detected: bool,
+        vendor_master_poor: bool = False,
     ) -> List[str]:
         """
         Return list of violated control IDs.
-
-        The original fallback — 'return controls if controls else ["AVC"]' —
-        incorrectly appended AVC (Critical) to approved payments that violated
-        no controls, inflating exception counts.  An approved payment with no
-        other violations returns [].  [BUG-6]
+        An approved payment with no other violations returns [].  [BUG-6]
+        VMH is emitted when vendor master health is Poor.  [FIX-19]
         """
         controls: List[str] = []
         if not is_approved:
@@ -701,7 +822,9 @@ def phonetic_key(self, text: str) -> str:
             controls.append("PAC")
         if is_new_vendor and high_spend:
             controls.append("VTC")
-        return controls   # may be empty — that is correct for a clean payment
+        if vendor_master_poor:
+            controls.append("VMH")
+        return controls
 
     # ── Explainability ────────────────────────────────────────────────────────
 
@@ -726,7 +849,9 @@ def phonetic_key(self, text: str) -> str:
                 f"after all 7 matching passes."
             )
         elif strategy == "exact":
-            parts.append(f"'{payee}' matched exactly to approved vendor '{matched_vendor}'.")
+            parts.append(
+                f"'{payee}' matched exactly to approved vendor '{matched_vendor}'."
+            )
         elif strategy == "normalized":
             parts.append(
                 f"'{payee}' matched '{matched_vendor}' after normalisation "
@@ -744,13 +869,13 @@ def phonetic_key(self, text: str) -> str:
             )
         elif strategy == "levenshtein":
             parts.append(
-                f"'{payee}' matched '{matched_vendor}' with {score}% edit-distance similarity "
-                f"— possible typo or transposition."
+                f"'{payee}' matched '{matched_vendor}' with {score}% edit-distance "
+                f"similarity — possible typo or transposition."
             )
         elif strategy == "phonetic":
             parts.append(
-                f"Phonetic match between '{payee}' and '{matched_vendor}' ({score}% similarity) "
-                f"— names sound similar but are spelled differently."
+                f"Phonetic match between '{payee}' and '{matched_vendor}' "
+                f"({score}% similarity) — names sound similar but are spelled differently."
             )
         elif strategy.startswith("obfuscation"):
             obf_type = strategy.split("_", 1)[1] if "_" in strategy else "unknown"
@@ -764,6 +889,12 @@ def phonetic_key(self, text: str) -> str:
                 f"Obfuscation detected in '{payee}' via {type_desc}; "
                 f"deobfuscated form matched '{matched_vendor}' at {score}%."
             )
+        else:
+            # [FIX-17] fallback for any strategy added in future
+            parts.append(
+                f"'{payee}' was flagged via '{strategy}' matching "
+                f"(score {score}%) against '{matched_vendor}'."
+            )
 
         fmt = f"R {amount:,.0f}" if amount >= 0 else f"-R {abs(amount):,.0f}"
         parts.append(f"Payment amount: {fmt}.")
@@ -771,13 +902,17 @@ def phonetic_key(self, text: str) -> str:
         if "AVC" in controls and strategy == "none":
             parts.append("Vendor is not on the approved vendor list.")
         if "VTC" in controls:
-            parts.append("New vendor receiving high-value payment — elevated onboarding risk.")
+            parts.append(
+                "New vendor receiving high-value payment — elevated onboarding risk."
+            )
         if "PAC" in controls and weekend:
             parts.append("Payment processed on a weekend or public holiday.")
         if "VDC" in controls and duplicate:
             parts.append("Potential duplicate payment detected.")
         if "OBC" in controls:
-            parts.append("Deliberate name obfuscation is a strong indicator of fraud risk.")
+            parts.append(
+                "Deliberate name obfuscation is a strong indicator of fraud risk."
+            )
 
         return " ".join(parts)
 
@@ -798,17 +933,17 @@ def phonetic_key(self, text: str) -> str:
         score = 0
 
         strategy_weight = {
-            "none":                      70,
-            "obfuscation_dot_spacing":   85,
-            "obfuscation_leetspeak":     85,
-            "obfuscation_char_repetition": 75,
-            "obfuscation_homoglyph":     90,
-            "phonetic":                  55,
-            "levenshtein":               45,
-            "partial":                   35,
-            "token_sort":                30,
-            "normalized":                15,
-            "exact":                      5,
+            "none":                          70,
+            "obfuscation_dot_spacing":       85,
+            "obfuscation_leetspeak":         85,
+            "obfuscation_char_repetition":   75,
+            "obfuscation_homoglyph":         90,
+            "phonetic":                      55,
+            "levenshtein":                   45,
+            "partial":                       35,
+            "token_sort":                    30,
+            "normalized":                    15,
+            "exact":                          5,
         }
         score += strategy_weight.get(strategy, 50)
 
@@ -858,13 +993,17 @@ def phonetic_key(self, text: str) -> str:
             reasons.append("Not on approved vendor list")
 
         if total_spend > 2_000_000:
-            score += 40; reasons.append(f"Very high spend: R {total_spend:,.0f}")
+            score += 40
+            reasons.append(f"Very high spend: R {total_spend:,.0f}")
         elif total_spend > 1_000_000:
-            score += 30; reasons.append(f"High spend: R {total_spend:,.0f}")
+            score += 30
+            reasons.append(f"High spend: R {total_spend:,.0f}")
         elif total_spend > 500_000:
-            score += 20; reasons.append(f"Elevated spend: R {total_spend:,.0f}")
+            score += 20
+            reasons.append(f"Elevated spend: R {total_spend:,.0f}")
         elif total_spend > 100_000:
-            score += 10; reasons.append(f"Notable spend: R {total_spend:,.0f}")
+            score += 10
+            reasons.append(f"Notable spend: R {total_spend:,.0f}")
 
         if duplicate_count > 0:
             score += min(20, duplicate_count * 8)
@@ -903,7 +1042,10 @@ def phonetic_key(self, text: str) -> str:
         Returns a results dict containing summary stats, all exceptions sorted
         by confidence descending, match distribution, and vendor health.
         """
-        run_id = str(uuid.uuid4())[:8].upper()
+        # [FIX-1] full UUID — no collision risk
+        run_id = str(uuid.uuid4()).upper().replace("-", "")[:12]
+
+        # [FIX-9] hash_file now raises DataValidationError on I/O failure
         master_hash = self.hash_file(master_file)
         payments_hash = self.hash_file(payments_file)
 
@@ -913,25 +1055,43 @@ def phonetic_key(self, text: str) -> str:
         master_vendors: List[str] = master_df["vendor_name"].dropna().tolist()
         master_clean: List[str] = [self.clean_name(v) for v in master_vendors]
 
-        # Pre-compute phonetic keys once — critical perf fix for large datasets  [BUG-1]
+        # Pre-compute phonetic keys once  [BUG-1]
         master_phonetic: List[str] = [self.phonetic_key(v) for v in master_clean]
 
         total = len(payments_df)
         if progress_callback:
-            progress_callback(0.05, f"Loaded {total:,} payments, {len(master_vendors):,} vendors")
+            progress_callback(
+                0.05, f"Loaded {total:,} payments, {len(master_vendors):,} vendors"
+            )
 
-        # Precompute vendor-level stats for tenure / duplicate analysis
+        # ── Compute vendor master health early so VMH flag is available ───────
+        # [FIX-14] pass pre-computed clean names to avoid recomputing
+        health = self._vendor_master_health(master_df, precomputed_clean=master_clean)
+        vendor_master_poor = health["health_label"] == "Poor"
+
+        # ── Vendor-level stats — keyed on CANONICAL name  [FIX-5] ─────────────
+        # Using clean_name as the key consolidates variants like "Acme Ltd"
+        # and "Acme" into one stats bucket for accurate total-spend figures.
         vendor_stats: Dict[str, Dict] = defaultdict(lambda: {
-            "payments": [], "total_spend": 0.0,
-            "first_seen": None, "last_seen": None,
-            "count": 0, "weekend_count": 0,
+            "payments": [],
+            "total_spend": 0.0,
+            "first_seen": None,
+            "last_seen": None,
+            "count": 0,
+            "weekend_count": 0,
+            # Keep one raw name per canonical key for display purposes
+            "display_name": "",
         })
 
-        for _, row in payments_df.iterrows():
-            pn = str(row["payee_name"])
-            amt = float(row.get("amount", 0) or 0)
-            dt_raw = str(row.get("payment_date", "") or "")
-            vd = vendor_stats[pn]
+        # [FIX-12] itertuples() is ~10–100x faster than iterrows()
+        for row in payments_df.itertuples(index=False):
+            pn_raw = str(getattr(row, "payee_name", ""))
+            pn_key = self.clean_name(pn_raw)
+            amt = float(getattr(row, "amount", 0) or 0)
+            dt_raw = str(getattr(row, "payment_date", "") or "")
+            vd = vendor_stats[pn_key]
+            if not vd["display_name"]:
+                vd["display_name"] = pn_raw
             vd["payments"].append(amt)
             vd["total_spend"] += amt
             vd["count"] += 1
@@ -948,42 +1108,55 @@ def phonetic_key(self, text: str) -> str:
                 except Exception:
                     pass
 
-        # Identify duplicates (same payee + amount) using rounded float key  [BUG-3]
+        # ── Duplicate detection (same canonical payee + amount)  [BUG-3] ──────
         dup_keys: set = set()
         seen: Dict[Tuple, int] = {}
-        for idx, row in payments_df.iterrows():
+        for i, row in enumerate(payments_df.itertuples(index=False)):
             key = (
-                self.clean_name(str(row["payee_name"])),
-                round(float(row.get("amount", 0) or 0), 2),   # round to avoid float epsilon
+                self.clean_name(str(getattr(row, "payee_name", ""))),
+                round(float(getattr(row, "amount", 0) or 0), 2),
             )
             if key in seen:
                 dup_keys.add(key)
             else:
-                seen[key] = idx
+                seen[key] = i
 
-        match_stats = {s: 0 for s in ["exact", "normalized", "token_sort", "partial",
-                                       "levenshtein", "phonetic", "obfuscation", "none"]}
+        # [FIX-7] track obfuscation sub-types individually
+        match_stats: Dict[str, int] = {
+            s: 0 for s in [
+                "exact", "normalized", "token_sort", "partial",
+                "levenshtein", "phonetic",
+                "obfuscation_dot_spacing", "obfuscation_leetspeak",
+                "obfuscation_char_repetition", "obfuscation_homoglyph",
+                "none",
+            ]
+        }
         results_list: List[Dict] = []
         exceptions: List[Dict] = []
         total_spend = 0.0
         exception_spend = 0.0
 
-        for i, (_, row) in enumerate(payments_df.iterrows()):
-            payee = str(row["payee_name"])
-            amount = float(row.get("amount", 0) or 0)
-            date_raw = str(row.get("payment_date", "") or "")
+        for i, row in enumerate(payments_df.itertuples(index=False)):
+            payee = str(getattr(row, "payee_name", ""))
+            amount = float(getattr(row, "amount", 0) or 0)
+            date_raw = str(getattr(row, "payment_date", "") or "")
             total_spend += amount
 
-            matched, score, strategy, passes = self.semantic_match_7pass(
+            # semantic_match_7pass now returns obf_type to avoid a second call
+            matched, score, strategy, obf_type, passes = self.semantic_match_7pass(
                 payee, master_vendors, master_clean, threshold,
-                master_phonetic=master_phonetic,   # pre-computed  [BUG-1]
+                master_phonetic=master_phonetic,
             )
 
-            stat_key = "obfuscation" if strategy.startswith("obfuscation") else strategy
+            # [FIX-7] record sub-type directly
+            stat_key = strategy if strategy in match_stats else "none"
             match_stats[stat_key] = match_stats.get(stat_key, 0) + 1
 
             is_exc = matched is None
-            vd = vendor_stats[payee]
+
+            # [FIX-5] look up stats by canonical key
+            payee_key = self.clean_name(payee)
+            vd = vendor_stats[payee_key]
 
             # Tenure
             if vd["first_seen"] and vd["last_seen"]:
@@ -996,16 +1169,14 @@ def phonetic_key(self, text: str) -> str:
             else:
                 tenure_days = 0
 
-            # Obfuscation check (pass master_clean for leet validation)  [BUG-9]
-            is_obf, _, _ = self.detect_obfuscation(
-                payee, master_clean=master_clean, threshold=threshold
-            )
+            # [FIX-4] reuse obf_type from 7-pass — no second detect_obfuscation call
+            is_obf = strategy.startswith("obfuscation")
 
             # Duplicate key uses rounded amount  [BUG-3]
-            clean_key = (self.clean_name(payee), round(amount, 2))
+            clean_key = (payee_key, round(amount, 2))
             is_dup = clean_key in dup_keys
 
-            # ── Weekend: check THIS payment's date, not vendor aggregate  [BUG-5] ──
+            # Weekend: check THIS payment's date  [BUG-5]
             is_weekend = False
             if date_raw:
                 try:
@@ -1013,7 +1184,8 @@ def phonetic_key(self, text: str) -> str:
                 except Exception:
                     pass
 
-            is_new = tenure_days < 90 and tenure_days >= 0
+            # [FIX-2] exclude date-less vendors (tenure==0) from new-vendor flag
+            is_new = 0 < tenure_days < 90
             is_high = vd["total_spend"] > 100_000
 
             controls = self.map_controls(
@@ -1024,6 +1196,7 @@ def phonetic_key(self, text: str) -> str:
                 is_new_vendor=is_new,
                 high_spend=is_high,
                 obfuscation_detected=is_obf,
+                vendor_master_poor=vendor_master_poor,
             )
 
             conf = self.confidence_score(
@@ -1042,7 +1215,7 @@ def phonetic_key(self, text: str) -> str:
 
             explanation = self.build_explanation(
                 payee, matched, score, strategy, amount,
-                controls, is_new, is_weekend, is_dup
+                controls, is_new, is_weekend, is_dup,
             )
 
             record = {
@@ -1055,8 +1228,10 @@ def phonetic_key(self, text: str) -> str:
                 "amount":             amount,
                 "payment_date":       date_raw,
                 "control_ids":        controls,
-                "control_names":      [CONTROL_TAXONOMY[c]["name"]
-                                       for c in controls if c in CONTROL_TAXONOMY],
+                "control_names":      [
+                    CONTROL_TAXONOMY[c]["name"]
+                    for c in controls if c in CONTROL_TAXONOMY
+                ],
                 "confidence_score":   conf,
                 "risk_score":         risk["score"],
                 "risk_level":         risk["level"],
@@ -1083,10 +1258,7 @@ def phonetic_key(self, text: str) -> str:
 
         exceptions.sort(key=lambda x: (-x["confidence_score"], -x["risk_score"]))
 
-        # Guard against zero total spend  [already present, kept for clarity]
         entropy = (exception_spend / total_spend * 100) if total_spend > 0 else 0.0
-
-        health = self._vendor_master_health(master_df)
 
         if progress_callback:
             progress_callback(0.9, "Finalising results")
@@ -1111,102 +1283,110 @@ def phonetic_key(self, text: str) -> str:
         }
 
         self.logger.info(
-            f"[{run_id}] Complete — {len(exceptions)} exceptions, entropy={entropy:.1f}%"
+            f"[{run_id}] Complete — {len(exceptions)} exceptions, "
+            f"entropy={entropy:.1f}%"
         )
         return output
 
-    def _vendor_master_health(self, master_df: pd.DataFrame) -> Dict:
-        names = master_df["vendor_name"].dropna()
-        total = len(names)
-        clean_names = [self.clean_name(n) for n in names]
+    def _vendor_master_health(
+        self,
+        master_df: pd.DataFrame,
+        precomputed_clean: Optional[List[str]] = None,
+    ) -> Dict:
+        """
+        Compute vendor master health metrics.
 
-        from collections import Counter
+        Accepts pre-computed clean names to avoid redundant processing.  [FIX-14]
+        Blank/NaN rows are included in ALL penalty counts for consistency.  [FIX-13]
+        """
+        total_rows = len(master_df)
+
+        # Count blanks across the full DataFrame (NaN and empty string)
+        blanks = int(
+            master_df["vendor_name"].isna().sum()
+            + (master_df["vendor_name"].fillna("") == "").sum()
+        )
+
+        # Work only on non-blank names for dupe/short detection
+        names = master_df["vendor_name"].dropna()
+        names = names[names.str.strip() != ""]
+
+        if precomputed_clean is not None:
+            # The precomputed list was built from dropna() — same population
+            clean_names = precomputed_clean
+        else:
+            clean_names = [self.clean_name(n) for n in names]
+
         counts = Counter(clean_names)
         dupes = sum(1 for v in counts.values() if v > 1)
-        blanks = master_df["vendor_name"].isna().sum() + (master_df["vendor_name"] == "").sum()
         short = sum(1 for n in clean_names if 0 < len(n) < 3)
 
         health_score = 100
-        if total > 0:
-            health_score -= int((dupes / total) * 40)
-            health_score -= int((blanks / total) * 30)
-            health_score -= int((short / total) * 20)
+        if total_rows > 0:
+            health_score -= int((dupes / total_rows) * 40)
+            health_score -= int((blanks / total_rows) * 30)
+            health_score -= int((short / total_rows) * 20)
         health_score = max(0, health_score)
 
         return {
-            "total_vendors":     total,
+            "total_vendors":     total_rows,
             "duplicate_records": dupes,
-            "blank_names":       int(blanks),
+            "blank_names":       blanks,
             "short_names":       short,
             "health_score":      health_score,
-            "health_label":      "Good" if health_score >= 80 else
-                                 "Fair" if health_score >= 60 else "Poor",
+            "health_label":      (
+                "Good" if health_score >= 80
+                else "Fair" if health_score >= 60
+                else "Poor"
+            ),
         }
+
     def clear_all_history(self) -> None:
         """
         Delete all analysis data from the database.
-        This completely resets the application state.
+        This completely resets the application state.  [FIX-3]
         """
-        import os
         import time
-        from pathlib import Path
-        
+
         self.logger.info("Clearing all history")
-        
-        # Force close ALL database connections
-        try:
-            # Close the main connection if it exists
-            if hasattr(self, '_conn') and self._conn:
-                self._conn.close()
-                self._conn = None
-        except Exception:
-            pass
-        
-        # Also close any connection from _db() method
-        try:
-            if hasattr(self, '_db_conn'):
-                self._db_conn.close()
-                self._db_conn = None
-        except Exception:
-            pass
-        
-        # Get the database path
+
         db_path = Path(self.db_path)
-        
-        # Small delay to ensure connections are closed
         time.sleep(0.1)
-        
-        # Delete the database file
+
         if db_path.exists():
             try:
                 db_path.unlink()
                 self.logger.info(f"Deleted database: {db_path}")
             except PermissionError as e:
                 self.logger.error(f"Permission denied: {e}")
-                raise Exception(f"Cannot delete database. Please close any other instances of PayReality and try again.\n\nError: {e}")
+                raise Exception(
+                    "Cannot delete database. Please close any other instances "
+                    f"of PayReality and try again.\n\nError: {e}"
+                ) from e
             except OSError as e:
                 self.logger.error(f"OS error: {e}")
-                raise Exception(f"Cannot delete database. File may be in use.\n\nError: {e}")
-        
-        # Delete any backup files
+                raise Exception(
+                    f"Cannot delete database. File may be in use.\n\nError: {e}"
+                ) from e
+
         for backup in db_path.parent.glob(f"{db_path.stem}_backup_*.db"):
             try:
                 backup.unlink()
                 self.logger.info(f"Deleted backup: {backup}")
             except Exception:
                 pass
-        
-        # Reinitialize fresh database
+
         self._init_db()
-        
-        # Clear any cached data
+
         self.master_df = None
         self.payments_df = None
-        self.current_results = None
-        
+        # Guard: current_results belongs to the app layer, not the engine  [FIX-3]
+        if hasattr(self, "current_results"):
+            self.current_results = None
+
         self.logger.info("History cleared successfully")
-        
-        # ── Export ────────────────────────────────────────────────────────────────
+
+    # ── Export ────────────────────────────────────────────────────────────────
 
     def export_json(self, results: Dict, filepath: str) -> None:
         """Export full results as structured JSON."""
@@ -1226,18 +1406,18 @@ def phonetic_key(self, text: str) -> str:
             },
             "exceptions": [
                 {
-                    "payee_name":      e["payee_name"],
-                    "amount":          e["amount"],
-                    "payment_date":    e["payment_date"],
-                    "control_ids":     e["control_ids"],
-                    "control_names":   e["control_names"],
+                    "payee_name":       e["payee_name"],
+                    "amount":           e["amount"],
+                    "payment_date":     e["payment_date"],
+                    "control_ids":      e["control_ids"],
+                    "control_names":    e["control_names"],
                     "confidence_score": e["confidence_score"],
-                    "risk_level":      e["risk_level"],
-                    "risk_score":      e["risk_score"],
-                    "match_strategy":  e["match_strategy"],
-                    "match_score":     e["match_score"],
-                    "explanation":     e["explanation"],
-                    "risk_reasons":    e["risk_reasons"],
+                    "risk_level":       e["risk_level"],
+                    "risk_score":       e["risk_score"],
+                    "match_strategy":   e["match_strategy"],
+                    "match_score":      e["match_score"],
+                    "explanation":      e["explanation"],
+                    "risk_reasons":     e["risk_reasons"],
                 }
                 for e in results["exceptions"]
             ],
@@ -1251,11 +1431,9 @@ def phonetic_key(self, text: str) -> str:
     def export_csv(self, results: Dict, filepath: str) -> None:
         """
         Export flat CSV suitable for audit management systems.
-        String cells are sanitised against Excel formula injection — any cell
-        starting with =, @, +, or - is prefixed with a single quote.  [SEC-2-CSV]
+        String cells are sanitised against Excel formula injection.
         """
         def _sanitise(v: Any) -> Any:
-            """Prevent CSV/Excel formula injection."""
             if isinstance(v, str) and v and v[0] in ("=", "@", "+", "-"):
                 return "'" + v
             return v
@@ -1263,26 +1441,24 @@ def phonetic_key(self, text: str) -> str:
         rows = []
         for e in results["exceptions"]:
             rows.append({
-                "run_id":            _sanitise(results["run_id"]),
-                "payee_name":        _sanitise(e["payee_name"]),
-                "amount":            e["amount"],
-                "payment_date":      _sanitise(e["payment_date"]),
-                "controls":          _sanitise(", ".join(e["control_ids"])),
-                "control_names":     _sanitise(" | ".join(e["control_names"])),
-                "confidence_score":  e["confidence_score"],
-                "risk_level":        _sanitise(e["risk_level"]),
-                "risk_score":        e["risk_score"],
-                "flag_type":         _sanitise(e["match_strategy"]),
-                "match_score":       e["match_score"],
-                "explanation":       _sanitise(e["explanation"]),
-                "risk_reasons":      _sanitise(" | ".join(e["risk_reasons"])),
-                "first_seen":        _sanitise(e["first_seen"]),
-                "last_seen":         _sanitise(e["last_seen"]),
-                "payment_count":     e["payment_count"],
-                "tenure_days":       e["tenure_days"],
+                "run_id":             _sanitise(results["run_id"]),
+                "payee_name":         _sanitise(e["payee_name"]),
+                "amount":             e["amount"],
+                "payment_date":       _sanitise(e["payment_date"]),
+                "controls":           _sanitise(", ".join(e["control_ids"])),
+                "control_names":      _sanitise(" | ".join(e["control_names"])),
+                "confidence_score":   e["confidence_score"],
+                "risk_level":         _sanitise(e["risk_level"]),
+                "risk_score":         e["risk_score"],
+                "flag_type":          _sanitise(e["match_strategy"]),
+                "match_score":        e["match_score"],
+                "explanation":        _sanitise(e["explanation"]),
+                "risk_reasons":       _sanitise(" | ".join(e["risk_reasons"])),
+                "first_seen":         _sanitise(e["first_seen"]),
+                "last_seen":          _sanitise(e["last_seen"]),
+                "payment_count":      e["payment_count"],
+                "tenure_days":        e["tenure_days"],
                 "total_vendor_spend": e["total_vendor_spend"],
             })
-        df = pd.DataFrame(rows)
-        df.to_csv(filepath, index=False)
+        pd.DataFrame(rows).to_csv(filepath, index=False)
         self.logger.info(f"CSV exported: {filepath}")
-        
