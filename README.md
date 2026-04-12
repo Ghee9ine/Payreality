@@ -117,7 +117,7 @@ For 30 years, internal audit has relied on syntactic controls — matching chara
 The Control Entropy Score (CES) is to audit what the credit score is to lending: A standardized, defensible, comparable metric that changes how the industry thinks about risk.
 
 ```
-CES = (Unmatched Spend / Total Spend) × (1 - Confidence Weight) × Control Criticality
+CES = 100 × Σ [(Unmatched Spend / Total Spend) × (Confidence / 100) × Criticality Weight]
 ```
 
 | CES Range | Interpretation |
