@@ -18,7 +18,7 @@ PayReality applies a multi-layered semantic approach to uncover discrepancies ca
 
 | Platform | Download |
 |----------|----------|
-| Windows | [PayReality.exe](dist/PayReality.exe) |
+| Windows | [Download PayReality.exe](https://github.com/Ghee9ine/Payreality/releases/download/v1.0.0/PayReality.exe) |
 
 Just double-click to run. No installation. No dependencies.
 
