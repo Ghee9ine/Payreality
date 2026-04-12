@@ -81,57 +81,56 @@ _LEET_MAP = {
 # ─── Control Taxonomy ────────────────────────────────────────────────────────
 
 CONTROL_TAXONOMY = {
-    "VDC": {
-        "id": "VDC",
-        "name": "Vendor Duplication Control",
-        "description": "Ensures no duplicate vendor records receive payments",
-        "severity": "High",
-        "category": "Master Data Integrity",
-    },
     "AVC": {
         "id": "AVC",
         "name": "Approved Vendor Control",
-        "description": "Verifies payments go to vendors on the approved vendor list",
         "severity": "Critical",
+        "criticality_weight": 1.0,  # Add this
         "category": "Payment Integrity",
-    },
-    "VNC": {
-        "id": "VNC",
-        "name": "Vendor Name Consistency Control",
-        "description": "Detects name variations, typos, aliases, and obfuscation",
-        "severity": "High",
-        "category": "Payment Integrity",
-    },
-    "PAC": {
-        "id": "PAC",
-        "name": "Payment Authorization Control",
-        "description": "Flags off-cycle, weekend, and unusual payment patterns",
-        "severity": "Medium",
-        "category": "Authorization",
-    },
-    "VTC": {
-        "id": "VTC",
-        "name": "Vendor Tenure Control",
-        "description": "Identifies new vendors receiving high-value payments",
-        "severity": "High",
-        "category": "Onboarding Risk",
-    },
-    "VMH": {
-        "id": "VMH",
-        "name": "Vendor Master Health Control",
-        "description": "Assesses completeness and integrity of vendor master data",
-        "severity": "Medium",
-        "category": "Master Data Integrity",
     },
     "OBC": {
         "id": "OBC",
         "name": "Obfuscation Detection Control",
-        "description": "Detects deliberate name manipulation to bypass controls",
         "severity": "Critical",
+        "criticality_weight": 1.0,  # Add this
         "category": "Fraud Detection",
     },
+    "VDC": {
+        "id": "VDC",
+        "name": "Vendor Duplication Control",
+        "severity": "High",
+        "criticality_weight": 0.8,  # Add this
+        "category": "Master Data Integrity",
+    },
+    "VNC": {
+        "id": "VNC",
+        "name": "Vendor Name Consistency Control",
+        "severity": "High",
+        "criticality_weight": 0.8,  # Add this
+        "category": "Payment Integrity",
+    },
+    "VTC": {
+        "id": "VTC",
+        "name": "Vendor Tenure Control",
+        "severity": "High",
+        "criticality_weight": 0.8,  # Add this
+        "category": "Onboarding Risk",
+    },
+    "PAC": {
+        "id": "PAC",
+        "name": "Payment Authorization Control",
+        "severity": "Medium",
+        "criticality_weight": 0.6,  # Add this
+        "category": "Authorization",
+    },
+    "VMH": {
+        "id": "VMH",
+        "name": "Vendor Master Health Control",
+        "severity": "Medium",
+        "criticality_weight": 0.6,  # Add this
+        "category": "Master Data Integrity",
+    },
 }
-
 
 # ─── Exceptions ──────────────────────────────────────────────────────────────
 
@@ -1258,8 +1257,25 @@ class PayRealityEngine:
 
         exceptions.sort(key=lambda x: (-x["confidence_score"], -x["risk_score"]))
 
-        entropy = (exception_spend / total_spend * 100) if total_spend > 0 else 0.0
+        # Calculate weighted CES (new formula)
+        ces_sum = 0.0
+        if total_spend > 0:
+            for ex in exceptions:
+                # Get the highest criticality weight from violated controls
+                max_weight = 0.6  # Default Medium weight
+                for control_id in ex.get("control_ids", []):
+                    if control_id in CONTROL_TAXONOMY:
+                        weight = CONTROL_TAXONOMY[control_id].get("criticality_weight", 0.6)
+                        max_weight = max(max_weight, weight)
 
+                # Contribution = (spend_ratio) × (confidence/100) × criticality_weight
+                contribution = (ex["amount"] / total_spend) * (ex["confidence_score"] / 100.0) * max_weight
+                ces_sum += contribution
+            
+            entropy = ces_sum * 100  # Scale to 0–100
+        else:
+            entropy = 0.0
+            
         if progress_callback:
             progress_callback(0.9, "Finalising results")
 
